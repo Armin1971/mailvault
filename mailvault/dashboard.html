@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}MailVault – Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <p class="subtitle">Deine Mail-Übersicht</p>
+</div>
+
+<!-- Statistik-Karten -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_mails }}</div>
+        <div class="stat-label">Mails gesamt</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_senders }}</div>
+        <div class="stat-label">Absender</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.avg_score }}</div>
+        <div class="stat-label">Ø Relevanz-Score</div>
+    </div>
+    <div class="stat-card stat-card-warn">
+        <div class="stat-value">{{ stats.low_score_count }}</div>
+        <div class="stat-label">Score &lt; 30 (Lösch-Kandidaten)</div>
+    </div>
+</div>
+
+<!-- Filter & Bulk-Aktionen -->
+<div class="toolbar">
+    <div class="filter-group">
+        <label>Kategorie:</label>
+        <select id="categoryFilter" onchange="applyFilter()">
+            <option value="all" {% if current_category == 'all' %}selected{% endif %}>Alle</option>
+            <option value="newsletter" {% if current_category == 'newsletter' %}selected{% endif %}>Newsletter ({{ categories.get('newsletter', 0) }})</option>
+            <option value="commercial" {% if current_category == 'commercial' %}selected{% endif %}>Werbung ({{ categories.get('commercial', 0) }})</option>
+            <option value="personal" {% if current_category == 'personal' %}selected{% endif %}>Persönlich ({{ categories.get('personal', 0) }})</option>
+            <option value="transactional" {% if current_category == 'transactional' %}selected{% endif %}>Transaktional ({{ categories.get('transactional', 0) }})</option>
+            <option value="unknown" {% if current_category == 'unknown' %}selected{% endif %}>Unbekannt ({{ categories.get('unknown', 0) }})</option>
+        </select>
+    </div>
+    <div class="filter-group">
+        <form method="POST" action="{{ url_for('bulk_delete_low_score') }}" class="inline-form"
+              onsubmit="return confirm('Wirklich alle Mails mit niedrigem Score löschen?')">
+            <label>Bulk-Delete Score &lt;</label>
+            <input type="number" name="threshold" value="20" min="0" max="100" class="input-sm">
+            <button type="submit" class="btn btn-danger btn-sm">Löschen</button>
+        </form>
+    </div>
+</div>
+
+<!-- Absender-Tabelle -->
+{% if senders %}
+<div class="table-wrapper">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>
+                    <a href="?sort=email&order={{ 'asc' if current_sort == 'email' and current_order == 'desc' else 'desc' }}&category={{ current_category }}"
+                       class="sort-link {% if current_sort == 'email' %}active{% endif %}">
+                        Absender
+                    </a>
+                </th>
+                <th>
+                    <a href="?sort=count&order={{ 'asc' if current_sort == 'count' and current_order == 'desc' else 'desc' }}&category={{ current_category }}"
+                       class="sort-link {% if current_sort == 'count' %}active{% endif %}">
+                        Mails
+                    </a>
+                </th>
+                <th>
+                    <a href="?sort=score&order={{ 'asc' if current_sort == 'score' and current_order == 'desc' else 'desc' }}&category={{ current_category }}"
+                       class="sort-link {% if current_sort == 'score' %}active{% endif %}">
+                        Ø Score
+                    </a>
+                </th>
+                <th>Kategorie</th>
+                <th>
+                    <a href="?sort=last&order={{ 'asc' if current_sort == 'last' and current_order == 'desc' else 'desc' }}&category={{ current_category }}"
+                       class="sort-link {% if current_sort == 'last' %}active{% endif %}">
+                        Letzte Mail
+                    </a>
+                </th>
+                <th>Aktionen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sender in senders %}
+            <tr class="{% if sender.is_blocked %}row-blocked{% endif %} {% if sender.avg_score < 25 %}row-low-score{% endif %}">
+                <td>
+                    <div class="sender-info">
+                        <span class="sender-name">{{ sender.display_name or '–' }}</span>
+                        <span class="sender-email">{{ sender.email }}</span>
+                    </div>
+                </td>
+                <td>
+                    <span class="badge {% if sender.mail_count > 100 %}badge-high{% elif sender.mail_count > 20 %}badge-med{% endif %}">
+                        {{ sender.mail_count }}
+                    </span>
+                </td>
+                <td>
+                    <div class="score-bar">
+                        <div class="score-fill score-{{ 'high' if sender.avg_score >= 60 else 'mid' if sender.avg_score >= 30 else 'low' }}"
+                             style="width: {{ sender.avg_score }}%"></div>
+                        <span class="score-text">{{ sender.avg_score|round(0)|int }}</span>
+                    </div>
+                </td>
+                <td>
+                    <span class="category-badge cat-{{ sender.category }}">{{ sender.category }}</span>
+                </td>
+                <td class="date-cell">
+                    {{ sender.last_seen.strftime('%d.%m.%Y') if sender.last_seen else '–' }}
+                </td>
+                <td class="action-cell">
+                    <a href="{{ url_for('sender_detail', sender_id=sender.id) }}" class="btn btn-sm">Details</a>
+                    <form method="POST" action="{{ url_for('delete_sender_mails', sender_id=sender.id) }}"
+                          class="inline-form"
+                          onsubmit="return confirm('Alle {{ sender.mail_count }} Mails von {{ sender.email }} löschen?')">
+                        <button type="submit" class="btn btn-danger btn-sm">Alle löschen</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <p>Noch keine Mails importiert.</p>
+    <a href="{{ url_for('scan') }}" class="btn btn-primary">Jetzt scannen</a>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function applyFilter() {
+    const cat = document.getElementById('categoryFilter').value;
+    const params = new URLSearchParams(window.location.search);
+    params.set('category', cat);
+    window.location.search = params.toString();
+}
+</script>
+{% endblock %}

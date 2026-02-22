@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Scan – MailVault{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Mail-Scan</h1>
+    <p class="subtitle">Importiere Mails aus Thunderbird oder direkt via IMAP</p>
+</div>
+
+<div class="card-grid">
+    <!-- Thunderbird Scan -->
+    <div class="card">
+        <h2>Thunderbird-Profil scannen</h2>
+        <p>Liest die lokalen mbox-Dateien aus deinem Thunderbird-Profil. Thunderbird sollte dabei geschlossen sein.</p>
+        <form method="POST">
+            <input type="hidden" name="scan_type" value="thunderbird">
+            <button type="submit" class="btn btn-primary">Thunderbird scannen</button>
+        </form>
+    </div>
+
+    <!-- IMAP Scan -->
+    <div class="card">
+        <h2>IMAP-Account scannen</h2>
+        <p>Liest Mails direkt vom IMAP-Server. Benötigt einen konfigurierten Account.</p>
+
+        {% if accounts %}
+        <form method="POST">
+            <input type="hidden" name="scan_type" value="imap">
+            <div class="form-group">
+                <label>Account:</label>
+                <select name="account_id" class="form-control">
+                    {% for acc in accounts %}
+                    <option value="{{ acc.id }}">{{ acc.name }} ({{ acc.username }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Max. Mails pro Ordner:</label>
+                <input type="number" name="limit" value="500" min="10" max="10000" class="form-control">
+            </div>
+            <button type="submit" class="btn btn-primary">IMAP scannen</button>
+        </form>
+        {% else %}
+        <p class="text-muted">Kein IMAP-Account konfiguriert.</p>
+        <a href="{{ url_for('settings') }}" class="btn">Account hinzufügen</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="info-box">
+    <h3>Wie funktioniert der Scan?</h3>
+    <p>
+        <strong>Thunderbird-Scan:</strong> Sucht im Thunderbird-Profil (~/.thunderbird/) nach mbox-Dateien
+        und importiert alle Mails in die lokale Datenbank. Duplikate werden anhand der Message-ID erkannt.
+    </p>
+    <p>
+        <strong>IMAP-Scan:</strong> Verbindet sich direkt mit dem Mailserver und lädt Mails herunter.
+        Vorteil: Kein laufendes Thunderbird nötig. Löschungen werden direkt auf dem Server durchgeführt.
+    </p>
+    <p>
+        Nach dem Import werden automatisch Relevanz-Scores berechnet und Absender kategorisiert.
+    </p>
+</div>
+{% endblock %}

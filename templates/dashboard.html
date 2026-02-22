@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}MailVault – Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <p class="subtitle">Deine Mail-Uebersicht</p>
+</div>
+
+<!-- Task-Toast -->
+<div id="taskToast" class="task-toast" style="display:none">
+    <div class="toast-header">
+        <span id="toastTitle">Loesche...</span>
+        <button onclick="document.getElementById('taskToast').style.display='none'" class="flash-close">&times;</button>
+    </div>
+    <div class="progress-bar-container progress-bar-sm">
+        <div class="progress-bar">
+            <div class="progress-fill" id="toastFill" style="width:0%"></div>
+        </div>
+    </div>
+    <div id="toastDetail" class="toast-detail">Starte...</div>
+</div>
+
+<!-- Statistik-Karten -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_mails }}</div>
+        <div class="stat-label">Mails gesamt</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_senders }}</div>
+        <div class="stat-label">Absender</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.avg_score }}</div>
+        <div class="stat-label">Durchschn. Relevanz-Score</div>
+    </div>
+    <div class="stat-card stat-card-warn">
+        <div class="stat-value">{{ stats.low_score_count }}</div>
+        <div class="stat-label">Score &lt; 30 (Loesch-Kandidaten)</div>
+    </div>
+</div>
+
+<!-- Filter & Bulk-Aktionen -->
+<div class="toolbar">
+    <div class="filter-group">
+        <label>Kategorie:</label>
+        <select id="categoryFilter" onchange="applyFilter()">
+            <option value="all" {% if current_category == 'all' %}selected{% endif %}>Alle</option>
+            <option value="newsletter" {% if current_category == 'newsletter' %}selected{% endif %}>Newsletter ({{ categories.get('newsletter', 0) }})</option>
+            <option value="commercial" {% if current_category == 'commercial' %}selected{% endif %}>Werbung ({{ categories.get('commercial', 0) }})</option>
+            <option value="personal" {% if current_category == 'personal' %}selected{% endif %}>Persoenlich ({{ categories.get('personal', 0) }})</option>
+            <option value="transactional" {% if current_category == 'transactional' %}selected{% endif %}>Transaktional ({{ categories.get('transactional', 0) }})</option>
+            <option value="unknown" {% if current_category == 'unknown' %}selected{% endif %}>Unbekannt ({{ categories.get('unknown', 0) }})</option>
+        </select>
+    </div>
+    <div class="filter-group">
+        <form method="POST" action="{{ url_for('bulk_delete_low_score') }}" class="inline-form"
+              onsubmit="return confirm('Wirklich alle Mails mit niedrigem Score loeschen?')">
+            <label>Bulk-Delete Score &lt;</label>
+            <input type="number" name="threshold" value="20" min="0" max="100" class="input-sm">
+            <button type="submit" class="btn btn-danger btn-sm">Loeschen</button>
+        </form>
+    </div>
+</div>
+
+<!-- Absender-Tabelle -->
+{% if senders %}
+<div class="table-wrapper">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>
+                    <a href="?sort=email&order={{ 'asc' if current_sort == 'email' and current_order == 'desc' else 'desc' }}&category={{ current_category }}" class="sort-link {% if current_sort == 'email' %}active{% endif %}">Absender</a>
+                </th>
+                <th>
+                    <a href="?sort=count&order={{ 'asc' if current_sort == 'count' and current_order == 'desc' else 'desc' }}&category={{ current_category }}" class="sort-link {% if current_sort == 'count' %}active{% endif %}">Mails</a>
+                </th>
+                <th>
+                    <a href="?sort=score&order={{ 'asc' if current_sort == 'score' and current_order == 'desc' else 'desc' }}&category={{ current_category }}" class="sort-link {% if current_sort == 'score' %}active{% endif %}">Score</a>
+                </th>
+                <th>Kategorie</th>
+                <th>
+                    <a href="?sort=last&order={{ 'asc' if current_sort == 'last' and current_order == 'desc' else 'desc' }}&category={{ current_category }}" class="sort-link {% if current_sort == 'last' %}active{% endif %}">Letzte Mail</a>
+                </th>
+                <th>Aktionen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sender in senders %}
+            <tr class="{% if sender.is_blocked %}row-blocked{% endif %} {% if sender.avg_score < 25 %}row-low-score{% endif %}" id="sender-row-{{ sender.id }}">
+                <td>
+                    <div class="sender-info">
+                        <span class="sender-name">{{ sender.display_name or '–' }}</span>
+                        <span class="sender-email">{{ sender.email }}</span>
+                    </div>
+                </td>
+                <td>
+                    <span class="badge {% if sender.mail_count > 100 %}badge-high{% elif sender.mail_count > 20 %}badge-med{% endif %}">{{ sender.mail_count }}</span>
+                </td>
+                <td>
+                    <div class="score-bar">
+                        <div class="score-fill score-{{ 'high' if sender.avg_score >= 60 else 'mid' if sender.avg_score >= 30 else 'low' }}" style="width: {{ sender.avg_score }}%"></div>
+                        <span class="score-text">{{ sender.avg_score|round(0)|int }}</span>
+                    </div>
+                </td>
+                <td>
+                    <span class="category-badge cat-{{ sender.category }}">{{ sender.category }}</span>
+                </td>
+                <td class="date-cell">{{ sender.last_seen.strftime('%d.%m.%Y') if sender.last_seen else '–' }}</td>
+                <td class="action-cell">
+                    <a href="{{ url_for('sender_detail', sender_id=sender.id) }}" class="btn btn-sm">Details</a>
+                    <button class="btn btn-danger btn-sm" id="del-btn-{{ sender.id }}"
+                            onclick="deleteSender({{ sender.id }}, '{{ sender.email }}', {{ sender.mail_count }})">
+                        Alle loeschen
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <p>Noch keine Mails importiert.</p>
+    <a href="{{ url_for('scan') }}" class="btn btn-primary">Jetzt scannen</a>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function applyFilter() {
+    var cat = document.getElementById('categoryFilter').value;
+    var params = new URLSearchParams(window.location.search);
+    params.set('category', cat);
+    window.location.search = params.toString();
+}
+
+var deleteInProgress = false;
+
+function deleteSender(senderId, senderEmail, count) {
+    if (deleteInProgress) {
+        alert('Es laeuft bereits eine Loeschung. Bitte warten.');
+        return;
+    }
+    if (!confirm('Alle ' + count + ' Mails von ' + senderEmail + ' loeschen?')) return;
+
+    deleteInProgress = true;
+
+    // Button deaktivieren
+    var btn = document.getElementById('del-btn-' + senderId);
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Laeuft...';
+    }
+
+    // Row ausgrauen
+    var row = document.getElementById('sender-row-' + senderId);
+    if (row) row.classList.add('row-deleting');
+
+    // Toast zeigen
+    var toast = document.getElementById('taskToast');
+    document.getElementById('toastTitle').textContent = 'Loesche: ' + senderEmail;
+    document.getElementById('toastFill').style.width = '0%';
+    document.getElementById('toastFill').className = 'progress-fill';
+    document.getElementById('toastDetail').textContent = 'Verbinde mit Server...';
+    toast.style.display = 'block';
+
+    fetch('/sender/' + senderId + '/delete-all', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.task_id) {
+            watchDeleteTask(data.task_id, senderId);
+        } else {
+            document.getElementById('toastDetail').textContent = 'Fehler: Kein Task gestartet';
+            deleteInProgress = false;
+        }
+    })
+    .catch(function(err) {
+        document.getElementById('toastDetail').textContent = 'Fehler: ' + err;
+        deleteInProgress = false;
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Alle loeschen';
+        }
+        if (row) row.classList.remove('row-deleting');
+    });
+}
+
+function watchDeleteTask(taskId, senderId) {
+    var toastFill = document.getElementById('toastFill');
+    var toastDetail = document.getElementById('toastDetail');
+    var toastTitle = document.getElementById('toastTitle');
+
+    var interval = setInterval(function() {
+        fetch('/api/task/' + taskId)
+        .then(function(r) { return r.json(); })
+        .then(function(task) {
+            var pct = 0;
+            if (task.total > 0) {
+                pct = Math.round(task.progress / task.total * 100);
+            }
+            toastFill.style.width = pct + '%';
+
+            // Zeige Details: "Ordner 3/12: INBOX (23 geloescht)"
+            var detail = '';
+            if (task.detail) detail = task.detail;
+            else if (task.message) detail = task.message;
+            toastDetail.textContent = detail;
+
+            if (task.status === 'done') {
+                clearInterval(interval);
+                toastFill.style.width = '100%';
+                toastFill.classList.add('progress-done');
+                toastTitle.textContent = 'Geloescht!';
+
+                var resultText = 'Fertig';
+                if (task.result && task.result.deleted !== undefined) {
+                    resultText = task.result.deleted + ' Mails geloescht';
+                }
+                toastDetail.textContent = resultText;
+                deleteInProgress = false;
+
+                // Row entfernen
+                setTimeout(function() {
+                    var row = document.getElementById('sender-row-' + senderId);
+                    if (row) {
+                        row.style.transition = 'opacity 0.5s';
+                        row.style.opacity = '0';
+                        setTimeout(function() { row.remove(); }, 500);
+                    }
+                    setTimeout(function() {
+                        document.getElementById('taskToast').style.display = 'none';
+                    }, 2000);
+                }, 1000);
+            }
+
+            if (task.status === 'error') {
+                clearInterval(interval);
+                toastTitle.textContent = 'Fehler!';
+                toastFill.classList.add('progress-error');
+                toastDetail.textContent = task.error || 'Unbekannter Fehler';
+                deleteInProgress = false;
+
+                var btn = document.getElementById('del-btn-' + senderId);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Alle loeschen';
+                }
+                var row = document.getElementById('sender-row-' + senderId);
+                if (row) row.classList.remove('row-deleting');
+            }
+        })
+        .catch(function(err) {
+            // Netzwerkfehler - weiter versuchen
+        });
+    }, 800);
+}
+</script>
+{% endblock %}

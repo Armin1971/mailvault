@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}{{ sender.display_name or sender.email }} – MailVault{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <a href="{{ url_for('dashboard') }}" class="back-link">← Dashboard</a>
+    <h1>{{ sender.display_name or sender.email }}</h1>
+    <p class="subtitle">{{ sender.email }}{% if sender.display_name %} · {{ sender.display_name }}{% endif %}</p>
+</div>
+
+<!-- Sender-Stats -->
+<div class="stats-grid stats-grid-sm">
+    <div class="stat-card">
+        <div class="stat-value">{{ sender.mail_count }}</div>
+        <div class="stat-label">Mails</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value score-{{ 'high' if sender.avg_score >= 60 else 'mid' if sender.avg_score >= 30 else 'low' }}-text">
+            {{ sender.avg_score|round(0)|int }}
+        </div>
+        <div class="stat-label">Ø Score</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">
+            <span class="category-badge cat-{{ sender.category }}">{{ sender.category }}</span>
+        </div>
+        <div class="stat-label">Kategorie</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ sender.first_seen.strftime('%d.%m.%Y') if sender.first_seen else '–' }}</div>
+        <div class="stat-label">Erste Mail</div>
+    </div>
+</div>
+
+<!-- Aktionen -->
+<div class="toolbar">
+    <form method="POST" action="{{ url_for('delete_sender_mails', sender_id=sender.id) }}"
+          onsubmit="return confirm('Wirklich ALLE {{ sender.mail_count }} Mails von diesem Absender löschen?')">
+        <button type="submit" class="btn btn-danger">Alle Mails dieses Absenders löschen</button>
+    </form>
+    <form method="POST" action="{{ url_for('delete_selected_mails') }}" id="deleteSelectedForm">
+        <button type="submit" class="btn btn-warning" onclick="return confirm('Ausgewählte Mails löschen?')">
+            Ausgewählte löschen
+        </button>
+    </form>
+</div>
+
+<!-- Mail-Tabelle -->
+<form method="POST" action="{{ url_for('delete_selected_mails') }}" id="mailListForm">
+<div class="table-wrapper">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th class="check-col">
+                    <input type="checkbox" id="selectAll" onchange="toggleAll(this)">
+                </th>
+                <th>
+                    <a href="?sort=subject&order={{ 'asc' if current_sort == 'subject' and current_order == 'desc' else 'desc' }}"
+                       class="sort-link">Betreff</a>
+                </th>
+                <th>
+                    <a href="?sort=date&order={{ 'asc' if current_sort == 'date' and current_order == 'desc' else 'desc' }}"
+                       class="sort-link">Datum</a>
+                </th>
+                <th>
+                    <a href="?sort=score&order={{ 'asc' if current_sort == 'score' and current_order == 'desc' else 'desc' }}"
+                       class="sort-link">Score</a>
+                </th>
+                <th>Flags</th>
+                <th>Vorschau</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for mail in mails %}
+            <tr class="{% if mail.score < 25 %}row-low-score{% elif mail.score > 70 %}row-high-score{% endif %}">
+                <td class="check-col">
+                    <input type="checkbox" name="mail_ids" value="{{ mail.id }}">
+                </td>
+                <td class="subject-cell">{{ mail.subject or '(kein Betreff)' }}</td>
+                <td class="date-cell">
+                    {{ mail.date.strftime('%d.%m.%Y %H:%M') if mail.date else '–' }}
+                </td>
+                <td>
+                    <div class="score-bar score-bar-sm">
+                        <div class="score-fill score-{{ 'high' if mail.score >= 60 else 'mid' if mail.score >= 30 else 'low' }}"
+                             style="width: {{ mail.score }}%"></div>
+                        <span class="score-text">{{ mail.score }}</span>
+                    </div>
+                </td>
+                <td class="flags-cell">
+                    {% if mail.has_unsubscribe %}<span class="flag" title="Hat Unsubscribe-Header">📧</span>{% endif %}
+                    {% if mail.has_attachments %}<span class="flag" title="Hat Anhänge">📎</span>{% endif %}
+                    {% if mail.is_noreply %}<span class="flag" title="No-Reply Absender">🤖</span>{% endif %}
+                    {% if mail.has_html %}<span class="flag" title="HTML-Mail">🎨</span>{% endif %}
+                </td>
+                <td class="preview-cell">
+                    <span class="preview-text">{{ mail.body_preview[:120] if mail.body_preview else '' }}{% if mail.body_preview and mail.body_preview|length > 120 %}…{% endif %}</span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<noscript>
+    <button type="submit" class="btn btn-warning">Ausgewählte löschen</button>
+</noscript>
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleAll(source) {
+    document.querySelectorAll('input[name="mail_ids"]').forEach(cb => {
+        cb.checked = source.checked;
+    });
+}
+
+// Verknüpfe den externen Delete-Button mit dem Form
+document.getElementById('deleteSelectedForm')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    document.getElementById('mailListForm').submit();
+});
+</script>
+{% endblock %}

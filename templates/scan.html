@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Scan – MailVault{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Mail-Scan</h1>
+    <p class="subtitle">Importiere Mails aus Thunderbird oder direkt via IMAP</p>
+</div>
+
+<!-- Progress-Anzeige (initial versteckt) -->
+<div id="progressPanel" class="card progress-panel" style="display:none">
+    <h2 id="progressTitle">Scan laeuft...</h2>
+    <div class="progress-bar-container">
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-fill" id="progressFill" style="width:0%"></div>
+        </div>
+        <span class="progress-pct" id="progressPct">0%</span>
+    </div>
+    <div class="progress-details">
+        <span id="progressMessage" class="progress-msg">Starte...</span>
+        <span id="progressDetail" class="progress-detail"></span>
+    </div>
+    <div id="progressResult" class="progress-result" style="display:none">
+        <a href="/" class="btn btn-primary">Zum Dashboard</a>
+    </div>
+</div>
+
+<div id="scanForms" class="card-grid">
+    <!-- Thunderbird Scan -->
+    <div class="card">
+        <h2>Thunderbird-Profil scannen</h2>
+        <p>Liest die lokalen mbox-Dateien aus deinem Thunderbird-Profil.</p>
+        <form onsubmit="startScan(event, 'thunderbird')">
+            <input type="hidden" name="scan_type" value="thunderbird">
+            <button type="submit" class="btn btn-primary">Thunderbird scannen</button>
+        </form>
+    </div>
+
+    <!-- IMAP Scan -->
+    <div class="card">
+        <h2>IMAP-Account scannen</h2>
+        <p>Liest Mails direkt vom IMAP-Server.</p>
+
+        {% if accounts %}
+        <form onsubmit="startScan(event, 'imap')">
+            <input type="hidden" name="scan_type" value="imap">
+            <div class="form-group">
+                <label>Account:</label>
+                <select name="account_id" class="form-control">
+                    {% for acc in accounts %}
+                    <option value="{{ acc.id }}">{{ acc.name }} ({{ acc.username }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Mails seit Jahr:</label>
+                    <input type="number" name="since" value="2025" min="2000" max="2026" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Max. pro Ordner (leer = alle):</label>
+                    <input type="number" name="limit" placeholder="alle" min="10" max="50000" class="form-control">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">IMAP scannen</button>
+        </form>
+        {% else %}
+        <p class="text-muted">Kein IMAP-Account konfiguriert.</p>
+        <a href="{{ url_for('settings') }}" class="btn">Account hinzufuegen</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="info-box">
+    <h3>Hinweise</h3>
+    <p>Der Scan laeuft im Hintergrund. Du kannst den Fortschritt oben live verfolgen. Duplikate werden automatisch erkannt und uebersprungen.</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function startScan(event, type) {
+    event.preventDefault();
+    var form = event.target;
+    var formData = new FormData(form);
+
+    document.getElementById('scanForms').style.display = 'none';
+    document.getElementById('progressPanel').style.display = 'block';
+    document.getElementById('progressTitle').textContent =
+        type === 'imap' ? 'IMAP-Scan laeuft...' : 'Thunderbird-Scan laeuft...';
+
+    fetch('/scan', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.task_id) {
+            pollTask(data.task_id);
+        }
+    })
+    .catch(function(err) {
+        document.getElementById('progressMessage').textContent = 'Fehler: ' + err;
+    });
+}
+
+function pollTask(taskId) {
+    var interval = setInterval(function() {
+        fetch('/api/task/' + taskId)
+        .then(function(r) { return r.json(); })
+        .then(function(task) {
+            var pct = task.total > 0 ? Math.round(task.progress / task.total * 100) : 0;
+            document.getElementById('progressFill').style.width = pct + '%';
+            document.getElementById('progressPct').textContent = pct + '%';
+            document.getElementById('progressMessage').textContent = task.message || '';
+            document.getElementById('progressDetail').textContent = task.detail || '';
+
+            if (task.status === 'done') {
+                clearInterval(interval);
+                document.getElementById('progressTitle').textContent = 'Scan abgeschlossen!';
+                document.getElementById('progressFill').style.width = '100%';
+                document.getElementById('progressPct').textContent = '100%';
+                document.getElementById('progressFill').classList.add('progress-done');
+
+                var resultText = '';
+                if (task.result) {
+                    if (task.result.imported !== undefined) resultText += task.result.imported + ' importiert';
+                    if (task.result.skipped) resultText += ', ' + task.result.skipped + ' uebersprungen';
+                    if (task.result.scored) resultText += ', ' + task.result.scored + ' bewertet';
+                    if (task.result.errors) resultText += ', ' + task.result.errors + ' Fehler';
+                }
+                document.getElementById('progressMessage').textContent = resultText || 'Fertig!';
+                document.getElementById('progressResult').style.display = 'block';
+            }
+
+            if (task.status === 'error') {
+                clearInterval(interval);
+                document.getElementById('progressTitle').textContent = 'Fehler!';
+                document.getElementById('progressFill').classList.add('progress-error');
+                document.getElementById('progressMessage').textContent = task.error || 'Unbekannter Fehler';
+                document.getElementById('progressResult').style.display = 'block';
+            }
+        });
+    }, 1000);
+}
+</script>
+{% endblock %}
