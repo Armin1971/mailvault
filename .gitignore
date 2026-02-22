@@ -1,0 +1,5 @@
+venv/
+mailvault.db
+mailvault.db-journal
+__pycache__/
+*.pyc
