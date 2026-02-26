@@ -51,3 +51,4 @@ Dann im Browser: http://localhost:5000
 - IMAP-Passwörter werden nur lokal in config.py gespeichert
 - Löschungen erfolgen über IMAP (nicht durch Manipulation lokaler Dateien)
 - Vor Bulk-Delete wird eine Bestätigung verlangt
+# mailvault
