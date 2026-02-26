@@ -118,7 +118,7 @@ def get_or_create_sender(addr, name):
     return sender
 
 
-def process_message(msg, folder_name, account_id=None):
+def process_message(msg, folder_name, account_id=None, mail_size=0):
     message_id = msg.get("Message-ID", "")
     if message_id and Mail.query.filter_by(message_id=message_id).first():
         return None
@@ -151,6 +151,7 @@ def process_message(msg, folder_name, account_id=None):
         folder=folder_name,
         body_preview=body_text[:500] if body_text else "",
         body_length=len(body_text),
+        mail_size=mail_size or len(body_text),
         has_html=has_html,
         has_attachments=has_attach,
         has_unsubscribe=has_unsub,
@@ -274,12 +275,29 @@ def scan_imap_account(account_id, folders=None, limit=None, since=None, on_progr
             for i, uid in enumerate(uids):
                 stats["scanned"] += 1
                 try:
-                    _, data = conn.fetch(uid, "(RFC822)")
+                    _, data = conn.fetch(uid, "(RFC822 RFC822.SIZE)")
                     if not data or not data[0]:
                         continue
-                    raw = data[0][1]
-                    msg = email.message_from_bytes(raw)
-                    result = process_message(msg, folder, account.id)
+                    # RFC822.SIZE aus der Antwort parsen
+                    raw_size = 0
+                    raw_msg = None
+                    for part in data:
+                        if isinstance(part, tuple):
+                            header_line = part[0].decode() if isinstance(part[0], bytes) else str(part[0])
+                            if b'RFC822.SIZE' in part[0] if isinstance(part[0], bytes) else 'RFC822.SIZE' in header_line:
+                                import re as _re
+                                size_match = _re.search(r'RFC822\.SIZE\s+(\d+)', header_line)
+                                if size_match:
+                                    raw_size = int(size_match.group(1))
+                            if len(part) > 1 and isinstance(part[1], bytes) and len(part[1]) > 100:
+                                raw_msg = part[1]
+                    if not raw_msg:
+                        # Fallback: altes Format
+                        raw_msg = data[0][1]
+                    msg = email.message_from_bytes(raw_msg)
+                    if not raw_size:
+                        raw_size = len(raw_msg)
+                    result = process_message(msg, folder, account.id, mail_size=raw_size)
                     if result:
                         result.imap_uid = uid.decode() if isinstance(uid, bytes) else str(uid)
                         result.imap_folder = folder

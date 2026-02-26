@@ -96,6 +96,7 @@ function startScan(event, type) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.task_id) {
+            window.history.replaceState(null, '', '/scan?task=' + data.task_id);
             pollTask(data.task_id);
         }
     })
@@ -143,5 +144,16 @@ function pollTask(taskId) {
         });
     }, 1000);
 }
+
+// Bei Seitenlade prüfen ob ein Task läuft
+var urlParams = new URLSearchParams(window.location.search);
+var resumeTask = urlParams.get('task');
+if (resumeTask) {
+    document.getElementById('scanForms').style.display = 'none';
+    document.getElementById('progressPanel').style.display = 'block';
+    document.getElementById('progressTitle').textContent = 'Scan laeuft...';
+    pollTask(resumeTask);
+}
+
 </script>
 {% endblock %}

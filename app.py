@@ -394,5 +394,97 @@ def bulk_delete_low_score():
     return redirect(url_for("dashboard"))
 
 
+# ─── Analyse ─────────────────────────────────────────────────────────────────
+
+
+@app.route("/analyse")
+def analyse():
+    """Groessenanalyse: Groesste Mails, Speicher pro Absender, Heatmap."""
+    from sqlalchemy import func
+
+    # Gesamtstatistiken
+    total_size = db.session.query(func.sum(Mail.mail_size)).filter(
+        Mail.is_deleted == False
+    ).scalar() or 0
+    total_mails = Mail.query.filter_by(is_deleted=False).count()
+
+    # Top 50 groesste Mails
+    biggest_mails = (
+        Mail.query.filter(Mail.is_deleted == False, Mail.mail_size > 0)
+        .order_by(Mail.mail_size.desc())
+        .limit(50)
+        .all()
+    )
+
+    # Groesse pro Absender (Top 30)
+    sender_sizes = (
+        db.session.query(
+            Sender.email,
+            Sender.display_name,
+            func.sum(Mail.mail_size).label("total_size"),
+            func.count(Mail.id).label("mail_count"),
+            func.avg(Mail.mail_size).label("avg_size"),
+        )
+        .join(Mail, Mail.sender_id == Sender.id)
+        .filter(Mail.is_deleted == False)
+        .group_by(Sender.id)
+        .order_by(func.sum(Mail.mail_size).desc())
+        .limit(30)
+        .all()
+    )
+
+    # Groesse pro Ordner
+    folder_sizes = (
+        db.session.query(
+            Mail.imap_folder,
+            func.sum(Mail.mail_size).label("total_size"),
+            func.count(Mail.id).label("mail_count"),
+        )
+        .filter(Mail.is_deleted == False)
+        .group_by(Mail.imap_folder)
+        .order_by(func.sum(Mail.mail_size).desc())
+        .all()
+    )
+
+    # Heatmap-Daten: Mails nach Monat und Groessenkategorie
+    heatmap_data = []
+    all_mails = (
+        Mail.query.filter(Mail.is_deleted == False, Mail.date != None, Mail.mail_size > 0)
+        .with_entities(Mail.date, Mail.mail_size)
+        .all()
+    )
+
+    from collections import defaultdict
+    month_size = defaultdict(lambda: {"tiny": 0, "small": 0, "medium": 0, "large": 0, "huge": 0})
+    for mail_date, size in all_mails:
+        if not mail_date:
+            continue
+        month_key = mail_date.strftime("%Y-%m")
+        if size < 10240:          # < 10 KB
+            month_size[month_key]["tiny"] += 1
+        elif size < 102400:       # < 100 KB
+            month_size[month_key]["small"] += 1
+        elif size < 1048576:      # < 1 MB
+            month_size[month_key]["medium"] += 1
+        elif size < 5242880:      # < 5 MB
+            month_size[month_key]["large"] += 1
+        else:                     # >= 5 MB
+            month_size[month_key]["huge"] += 1
+
+    # Sortiert nach Monat
+    heatmap_months = sorted(month_size.keys())
+    heatmap = [{"month": m, **month_size[m]} for m in heatmap_months]
+
+    return render_template(
+        "analyse.html",
+        total_size=total_size,
+        total_mails=total_mails,
+        biggest_mails=biggest_mails,
+        sender_sizes=sender_sizes,
+        folder_sizes=folder_sizes,
+        heatmap=heatmap,
+    )
+
+
 if __name__ == "__main__":
-    app.run(debug=config.DEBUG, port=config.PORT, host="0.0.0.0", use_reloader=False)
+    app.run(debug=config.DEBUG, port=config.PORT, host="0.0.0.0")

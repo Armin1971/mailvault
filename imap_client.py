@@ -4,6 +4,10 @@ import imaplib
 from models import db, Mail, ImapAccount
 
 TRASH_FOLDERS = ["[Gmail]/Papierkorb", "[Gmail]/Trash", "[Gmail]/Bin"]
+ALL_MAIL_FOLDERS = ["[Gmail]/Alle Nachrichten", "[Gmail]/All Mail"]
+
+# Ordner in denen wir suchen (Reihenfolge: erst INBOX, dann Alle Nachrichten)
+SEARCH_FOLDERS = ["INBOX"] + ALL_MAIL_FOLDERS
 
 
 def get_imap_connection(account):
@@ -37,6 +41,23 @@ def _find_trash_folder(conn):
     return None
 
 
+def _find_available_folders(conn, candidates):
+    """Prueft welche Ordner aus der Kandidatenliste existieren."""
+    _, folder_list = conn.list()
+    available = []
+    for entry in folder_list:
+        if isinstance(entry, bytes):
+            parts = entry.decode("utf-8", errors="replace")
+            name = parts.split('"')[-2] if '"' in parts else parts.split()[-1]
+            available.append(name)
+
+    result = []
+    for candidate in candidates:
+        if candidate in available:
+            result.append(candidate)
+    return result
+
+
 def delete_mails_by_sender(account_id, sender_email, on_progress=None):
     account = ImapAccount.query.get(account_id)
     if not account:
@@ -48,11 +69,29 @@ def delete_mails_by_sender(account_id, sender_email, on_progress=None):
 
     try:
         trash_folder = _find_trash_folder(conn)
-        conn.select('"INBOX"')
+        folders = _find_available_folders(conn, SEARCH_FOLDERS)
 
-        # UID SEARCH statt normaler SEARCH
-        _, nums = conn.uid("SEARCH", None, f'FROM "{sender_email}"')
-        if not nums[0]:
+        if not folders:
+            folders = ["INBOX"]
+
+        total_found = 0
+        folder_uids = {}
+
+        # Erst zaehlen in allen Ordnern
+        for folder in folders:
+            try:
+                status, _ = conn.select(f'"{folder}"')
+                if status != "OK":
+                    continue
+                _, nums = conn.uid("SEARCH", None, f'FROM "{sender_email}"')
+                if nums[0]:
+                    uids = nums[0].split()
+                    folder_uids[folder] = uids
+                    total_found += len(uids)
+            except Exception:
+                pass
+
+        if total_found == 0:
             if on_progress:
                 on_progress(1, 1, "Keine Mails gefunden", "0 geloescht")
             mails = Mail.query.filter_by(sender_email=sender_email, account_id=account_id).all()
@@ -62,47 +101,52 @@ def delete_mails_by_sender(account_id, sender_email, on_progress=None):
             conn.logout()
             return {"deleted": 0, "errors": []}
 
-        uids = nums[0].split()
-        total = len(uids)
-
         if on_progress:
-            on_progress(0, total, f"{total} Mails gefunden", "Starte Loeschung...")
+            on_progress(0, total_found, f"{total_found} Mails in {len(folder_uids)} Ordnern", "Starte Loeschung...")
 
-        # In Batches per UID MOVE
-        batch_size = 50
-        for batch_start in range(0, len(uids), batch_size):
-            batch = uids[batch_start:batch_start + batch_size]
-            uid_str = b",".join(batch).decode()
-
+        # Loeschen in jedem Ordner
+        for folder, uids in folder_uids.items():
             try:
-                if trash_folder:
-                    conn.uid("MOVE", uid_str, f'"{trash_folder}"')
-                else:
-                    conn.uid("STORE", uid_str, "+FLAGS", "\\Deleted")
-                    conn.expunge()
-                deleted_count += len(batch)
-            except Exception:
-                # Fallback: einzeln
-                for uid in batch:
-                    try:
-                        uid_s = uid.decode() if isinstance(uid, bytes) else uid
-                        if trash_folder:
-                            conn.uid("MOVE", uid_s, f'"{trash_folder}"')
-                        else:
-                            conn.uid("STORE", uid_s, "+FLAGS", "\\Deleted")
-                        deleted_count += 1
-                    except Exception as e:
-                        errors.append(f"UID {uid}: {e}")
-                if not trash_folder:
-                    conn.expunge()
+                status, _ = conn.select(f'"{folder}"')
+                if status != "OK":
+                    continue
 
-            if on_progress:
-                on_progress(deleted_count, total,
-                            f"INBOX: {deleted_count}/{total}",
-                            f"{deleted_count} von {total} geloescht")
+                batch_size = 50
+                for batch_start in range(0, len(uids), batch_size):
+                    batch = uids[batch_start:batch_start + batch_size]
+                    uid_str = b",".join(batch).decode()
+
+                    try:
+                        if trash_folder:
+                            conn.uid("MOVE", uid_str, f'"{trash_folder}"')
+                        else:
+                            conn.uid("STORE", uid_str, "+FLAGS", "\\Deleted")
+                            conn.expunge()
+                        deleted_count += len(batch)
+                    except Exception:
+                        for uid in batch:
+                            try:
+                                uid_s = uid.decode() if isinstance(uid, bytes) else uid
+                                if trash_folder:
+                                    conn.uid("MOVE", uid_s, f'"{trash_folder}"')
+                                else:
+                                    conn.uid("STORE", uid_s, "+FLAGS", "\\Deleted")
+                                deleted_count += 1
+                            except Exception as e:
+                                errors.append(f"UID {uid}: {e}")
+                        if not trash_folder:
+                            conn.expunge()
+
+                    if on_progress:
+                        on_progress(deleted_count, total_found,
+                                    f"{folder}: {deleted_count}/{total_found}",
+                                    f"{deleted_count} von {total_found} geloescht")
+
+            except Exception as e:
+                errors.append(f"Ordner {folder}: {e}")
 
         if on_progress:
-            on_progress(total, total, "Abgeschlossen", f"{deleted_count} Mails geloescht")
+            on_progress(total_found, total_found, "Abgeschlossen", f"{deleted_count} Mails geloescht")
 
     except Exception as e:
         errors.append(str(e))
@@ -152,11 +196,9 @@ def delete_mails_by_ids(account_id, mail_ids, on_progress=None):
                     errors.append(f"Ordner {folder} nicht auswaehlbar")
                     continue
 
-                # Mails mit und ohne UID trennen
                 mails_with_uid = [(m, m.imap_uid) for m in folder_mails if m.imap_uid]
                 mails_without_uid = [m for m in folder_mails if not m.imap_uid]
 
-                # Batch UID MOVE
                 batch_size = 50
                 for batch_start in range(0, len(mails_with_uid), batch_size):
                     batch = mails_with_uid[batch_start:batch_start + batch_size]
@@ -190,7 +232,6 @@ def delete_mails_by_ids(account_id, mail_ids, on_progress=None):
                 if not trash_folder:
                     conn.expunge()
 
-                # Fallback fuer Mails ohne UID: per Message-ID suchen
                 for mail in mails_without_uid:
                     try:
                         _, msg_nums = conn.uid("SEARCH", None, f'HEADER Message-ID "{mail.message_id}"')

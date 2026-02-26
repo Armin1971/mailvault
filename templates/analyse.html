@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Analyse – MailVault{% endblock %}
+
+{% macro format_size(bytes) %}
+{% if bytes >= 1073741824 %}{{ "%.1f GB"|format(bytes / 1073741824) }}
+{% elif bytes >= 1048576 %}{{ "%.1f MB"|format(bytes / 1048576) }}
+{% elif bytes >= 1024 %}{{ "%.0f KB"|format(bytes / 1024) }}
+{% else %}{{ bytes }} B{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Groessenanalyse</h1>
+    <p class="subtitle">Speicherverbrauch deines Postfachs</p>
+</div>
+
+<!-- Gesamtstatistiken -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ format_size(total_size) }}</div>
+        <div class="stat-label">Gesamtgroesse</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ total_mails }}</div>
+        <div class="stat-label">Mails gesamt</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{% if total_mails > 0 %}{{ format_size(total_size // total_mails) }}{% else %}0{% endif %}</div>
+        <div class="stat-label">Durchschn. Groesse</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{% if biggest_mails %}{{ format_size(biggest_mails[0].mail_size) }}{% else %}0{% endif %}</div>
+        <div class="stat-label">Groesste Mail</div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('biggest')">Groesste Mails</button>
+    <button class="tab-btn" onclick="showTab('senders')">Nach Absender</button>
+    <button class="tab-btn" onclick="showTab('folders')">Nach Ordner</button>
+    <button class="tab-btn" onclick="showTab('heatmap')">Heatmap</button>
+</div>
+
+<!-- Tab: Groesste Mails -->
+<div id="tab-biggest" class="tab-content active">
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Groesse</th>
+                    <th>Betreff</th>
+                    <th>Absender</th>
+                    <th>Datum</th>
+                    <th>Ordner</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mail in biggest_mails %}
+                <tr>
+                    <td class="rank-cell">{{ loop.index }}</td>
+                    <td class="size-cell">
+                        <span class="size-badge {% if mail.mail_size >= 5242880 %}size-huge{% elif mail.mail_size >= 1048576 %}size-large{% elif mail.mail_size >= 102400 %}size-medium{% else %}size-small{% endif %}">
+                            {{ format_size(mail.mail_size) }}
+                        </span>
+                    </td>
+                    <td class="subject-cell" title="{{ mail.subject }}">{{ mail.subject[:60] if mail.subject else '(kein Betreff)' }}</td>
+                    <td>
+                        <div class="sender-info">
+                            <span class="sender-name">{{ mail.sender_name or '' }}</span>
+                            <span class="sender-email">{{ mail.sender_email }}</span>
+                        </div>
+                    </td>
+                    <td class="date-cell">{{ mail.date.strftime('%d.%m.%Y') if mail.date else '-' }}</td>
+                    <td>{{ mail.imap_folder or mail.folder or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Tab: Nach Absender -->
+<div id="tab-senders" class="tab-content">
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Absender</th>
+                    <th>Gesamt</th>
+                    <th>Mails</th>
+                    <th>Durchschn.</th>
+                    <th>Balken</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sender_sizes %}
+                <tr>
+                    <td class="rank-cell">{{ loop.index }}</td>
+                    <td>
+                        <div class="sender-info">
+                            <span class="sender-name">{{ s.display_name or '' }}</span>
+                            <span class="sender-email">{{ s.email }}</span>
+                        </div>
+                    </td>
+                    <td class="size-cell">
+                        <span class="size-badge {% if s.total_size >= 5242880 %}size-huge{% elif s.total_size >= 1048576 %}size-large{% else %}size-medium{% endif %}">
+                            {{ format_size(s.total_size) }}
+                        </span>
+                    </td>
+                    <td>{{ s.mail_count }}</td>
+                    <td>{{ format_size(s.avg_size|int) }}</td>
+                    <td>
+                        {% if sender_sizes %}
+                        <div class="size-bar">
+                            <div class="size-fill" style="width: {{ (s.total_size / sender_sizes[0].total_size * 100)|int }}%"></div>
+                        </div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Tab: Nach Ordner -->
+<div id="tab-folders" class="tab-content">
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Ordner</th>
+                    <th>Groesse</th>
+                    <th>Mails</th>
+                    <th>Durchschn.</th>
+                    <th>Balken</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in folder_sizes %}
+                <tr>
+                    <td>{{ f.imap_folder or '(kein Ordner)' }}</td>
+                    <td class="size-cell">
+                        <span class="size-badge {% if f.total_size >= 5242880 %}size-huge{% elif f.total_size >= 1048576 %}size-large{% else %}size-medium{% endif %}">
+                            {{ format_size(f.total_size) }}
+                        </span>
+                    </td>
+                    <td>{{ f.mail_count }}</td>
+                    <td>{{ format_size((f.total_size // f.mail_count) if f.mail_count else 0) }}</td>
+                    <td>
+                        {% if folder_sizes %}
+                        <div class="size-bar">
+                            <div class="size-fill" style="width: {{ (f.total_size / folder_sizes[0].total_size * 100)|int }}%"></div>
+                        </div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Tab: Heatmap -->
+<div id="tab-heatmap" class="tab-content">
+    <p class="subtitle">Mail-Aufkommen nach Monat und Groesse</p>
+    {% if heatmap %}
+    <div class="heatmap-wrapper">
+        <div class="heatmap-legend">
+            <span class="heatmap-label">Riesig (&gt;5 MB)</span>
+            <span class="heatmap-label">Gross (1-5 MB)</span>
+            <span class="heatmap-label">Mittel (100KB-1MB)</span>
+            <span class="heatmap-label">Klein (10-100KB)</span>
+            <span class="heatmap-label">Winzig (&lt;10KB)</span>
+        </div>
+        <div class="heatmap-grid">
+            {% for row in heatmap %}
+            <div class="heatmap-col">
+                <div class="heatmap-cell heat-{{ 'high' if row.huge > 5 else 'med' if row.huge > 0 else 'none' }}" title="{{ row.month }}: {{ row.huge }} riesige">{{ row.huge or '' }}</div>
+                <div class="heatmap-cell heat-{{ 'high' if row.large > 10 else 'med' if row.large > 0 else 'none' }}" title="{{ row.month }}: {{ row.large }} grosse">{{ row.large or '' }}</div>
+                <div class="heatmap-cell heat-{{ 'high' if row.medium > 20 else 'med' if row.medium > 5 else 'low' if row.medium > 0 else 'none' }}" title="{{ row.month }}: {{ row.medium }} mittlere">{{ row.medium or '' }}</div>
+                <div class="heatmap-cell heat-{{ 'high' if row.small > 30 else 'med' if row.small > 10 else 'low' if row.small > 0 else 'none' }}" title="{{ row.month }}: {{ row.small }} kleine">{{ row.small or '' }}</div>
+                <div class="heatmap-cell heat-{{ 'high' if row.tiny > 30 else 'med' if row.tiny > 10 else 'low' if row.tiny > 0 else 'none' }}" title="{{ row.month }}: {{ row.tiny }} winzige">{{ row.tiny or '' }}</div>
+                <div class="heatmap-month">{{ row.month[5:] }}/{{ row.month[:4] }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <p class="text-muted">Keine Daten fuer Heatmap vorhanden. Bitte erst einen Scan durchfuehren.</p>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showTab(name) {
+    var tabs = document.querySelectorAll('.tab-content');
+    var btns = document.querySelectorAll('.tab-btn');
+    for (var i = 0; i < tabs.length; i++) {
+        tabs[i].classList.remove('active');
+        btns[i].classList.remove('active');
+    }
+    document.getElementById('tab-' + name).classList.add('active');
+    event.target.classList.add('active');
+}
+</script>
+{% endblock %}

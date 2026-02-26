@@ -61,6 +61,7 @@ class Mail(db.Model):
     score_details = db.Column(db.Text, nullable=True)  # JSON mit Einzelwertungen
     body_preview = db.Column(db.Text, nullable=True)  # Erste 500 Zeichen
     body_length = db.Column(db.Integer, default=0)
+    mail_size = db.Column(db.Integer, default=0)  # RFC822.SIZE in Bytes
     has_html = db.Column(db.Boolean, default=False)
     has_attachments = db.Column(db.Boolean, default=False)
 
