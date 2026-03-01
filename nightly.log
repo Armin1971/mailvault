@@ -1,0 +1,145 @@
+[2026-02-27 03:00:02] === Nightly Scan gestartet ===
+[2026-02-27 03:00:02] Scanne Account: Gmail Armin (armin.leistenschneider@gmail.com)
+[2026-02-27 03:01:29]   Ordner: !!! Britta Emails - 1% - 100 neu, 0 uebersprungen, 0 Fehler
+[2026-02-27 03:07:40]   Ordner: 700 Jahre Sotzbach - 2% - 200 neu, 0 uebersprungen, 0 Fehler
+[2026-02-27 03:09:38]   Ordner: Erbengemeinschaft - 2% - 300 neu, 0 uebersprungen, 0 Fehler
+[2026-02-27 03:10:18]   Ordner: Fernuni - 3% - 400 neu, 0 uebersprungen, 0 Fehler
+[2026-02-27 03:12:27]   Ordner: INBOX - 4% - 411 neu, 89 uebersprungen, 0 Fehler
+[2026-02-27 03:15:05]   Ordner: INBOX - 5% - 411 neu, 189 uebersprungen, 0 Fehler
+[2026-02-27 03:16:30]   Ordner: INBOX - 6% - 411 neu, 289 uebersprungen, 0 Fehler
+[2026-02-27 03:17:50]   Ordner: INBOX - 6% - 411 neu, 389 uebersprungen, 0 Fehler
+[2026-02-27 03:18:59]   Ordner: INBOX - 7% - 411 neu, 489 uebersprungen, 0 Fehler
+[2026-02-27 03:21:03]   Ordner: INBOX - 8% - 411 neu, 589 uebersprungen, 0 Fehler
+[2026-02-27 03:22:11]   Ordner: INBOX - 9% - 411 neu, 689 uebersprungen, 0 Fehler
+[2026-02-27 03:22:46]   Ordner: Scheidung - 9% - 478 neu, 722 uebersprungen, 0 Fehler
+[2026-02-27 03:23:30]   Ordner: [Gmail]/Alle Nachrichten - 10% - 564 neu, 736 uebersprungen, 0 Fehler
+[2026-02-27 03:24:20]   Ordner: [Gmail]/Alle Nachrichten - 11% - 648 neu, 752 uebersprungen, 0 Fehler
+[2026-02-27 03:25:07]   Ordner: [Gmail]/Alle Nachrichten - 12% - 744 neu, 756 uebersprungen, 0 Fehler
+[2026-02-27 03:26:11]   Ordner: [Gmail]/Alle Nachrichten - 13% - 828 neu, 772 uebersprungen, 0 Fehler
+[2026-02-27 03:26:51]   Ordner: [Gmail]/Alle Nachrichten - 13% - 927 neu, 773 uebersprungen, 0 Fehler
+[2026-02-27 03:27:18]   Ordner: [Gmail]/Alle Nachrichten - 14% - 1027 neu, 773 uebersprungen, 0 Fehler
+[2026-02-27 03:28:07]   Ordner: [Gmail]/Alle Nachrichten - 15% - 1122 neu, 778 uebersprungen, 0 Fehler
+/opt/mailvault/scanner.py:92: XMLParsedAsHTMLWarning: It looks like you're parsing an XML document using an HTML parser. If this really is an HTML document (maybe it's XHTML?), you can ignore or filter this warning. If it's XML, you should know that using an XML parser will be more reliable. To parse this document as XML, make sure you have the lxml package installed, and pass the keyword argument `features="xml"` into the BeautifulSoup constructor.
+  soup = BeautifulSoup(body_html, "lxml")
+[2026-02-27 03:28:49]   Ordner: [Gmail]/Alle Nachrichten - 16% - 1213 neu, 787 uebersprungen, 0 Fehler
+[2026-02-27 03:29:44]   Ordner: [Gmail]/Alle Nachrichten - 17% - 1312 neu, 788 uebersprungen, 0 Fehler
+[2026-02-27 03:32:06]   Ordner: [Gmail]/Alle Nachrichten - 17% - 1411 neu, 789 uebersprungen, 0 Fehler
+[2026-02-27 03:33:39]   Ordner: [Gmail]/Alle Nachrichten - 18% - 1511 neu, 789 uebersprungen, 0 Fehler
+[2026-02-27 03:35:19]   Ordner: [Gmail]/Alle Nachrichten - 19% - 1611 neu, 789 uebersprungen, 0 Fehler
+[2026-02-27 03:36:49]   Ordner: [Gmail]/Alle Nachrichten - 20% - 1711 neu, 789 uebersprungen, 0 Fehler
+[2026-02-27 03:37:50]   Ordner: [Gmail]/Alle Nachrichten - 21% - 1806 neu, 794 uebersprungen, 0 Fehler
+[2026-02-27 03:38:46]   Ordner: [Gmail]/Alle Nachrichten - 21% - 1906 neu, 794 uebersprungen, 0 Fehler
+[2026-02-27 03:39:24]   Ordner: [Gmail]/Alle Nachrichten - 22% - 2006 neu, 794 uebersprungen, 0 Fehler
+[2026-02-27 03:40:46]   Ordner: [Gmail]/Alle Nachrichten - 23% - 2106 neu, 794 uebersprungen, 0 Fehler
+[2026-02-27 03:42:02]   Ordner: [Gmail]/Alle Nachrichten - 24% - 2206 neu, 794 uebersprungen, 0 Fehler
+[2026-02-27 03:43:50]   Ordner: [Gmail]/Alle Nachrichten - 24% - 2304 neu, 796 uebersprungen, 0 Fehler
+[2026-02-27 03:44:57]   Ordner: [Gmail]/Alle Nachrichten - 25% - 2402 neu, 798 uebersprungen, 0 Fehler
+[2026-02-27 03:46:14]   Ordner: [Gmail]/Alle Nachrichten - 26% - 2502 neu, 798 uebersprungen, 0 Fehler
+[2026-02-27 03:48:21]   Ordner: [Gmail]/Alle Nachrichten - 27% - 2602 neu, 798 uebersprungen, 0 Fehler
+[2026-02-27 03:50:33]   Ordner: [Gmail]/Alle Nachrichten - 28% - 2702 neu, 798 uebersprungen, 0 Fehler
+[2026-02-27 03:52:56]   Ordner: [Gmail]/Alle Nachrichten - 28% - 2802 neu, 798 uebersprungen, 0 Fehler
+[2026-02-27 03:55:43]   Ordner: [Gmail]/Alle Nachrichten - 29% - 2902 neu, 798 uebersprungen, 0 Fehler
+[2026-02-27 03:59:04]   Ordner: [Gmail]/Alle Nachrichten - 30% - 3001 neu, 799 uebersprungen, 0 Fehler
+[2026-02-27 04:02:30]   Ordner: [Gmail]/Alle Nachrichten - 31% - 3101 neu, 799 uebersprungen, 0 Fehler
+[2026-02-27 04:08:46]   Ordner: [Gmail]/Alle Nachrichten - 32% - 3201 neu, 799 uebersprungen, 0 Fehler
+[2026-02-27 04:14:56]   Ordner: [Gmail]/Alle Nachrichten - 32% - 3301 neu, 799 uebersprungen, 0 Fehler
+[2026-02-27 04:15:47]   Ordner: [Gmail]/Alle Nachrichten - 33% - 3401 neu, 799 uebersprungen, 0 Fehler
+[2026-02-27 04:16:38]   Ordner: [Gmail]/Alle Nachrichten - 34% - 3501 neu, 799 uebersprungen, 0 Fehler
+[2026-02-27 04:17:06]   Ordner: [Gmail]/Alle Nachrichten - 35% - 3601 neu, 799 uebersprungen, 0 Fehler
+[2026-02-27 04:18:07]   Ordner: [Gmail]/Alle Nachrichten - 36% - 3701 neu, 799 uebersprungen, 0 Fehler
+[2026-02-27 04:19:00]   Ordner: [Gmail]/Alle Nachrichten - 36% - 3798 neu, 802 uebersprungen, 0 Fehler
+[2026-02-27 04:19:52]   Ordner: [Gmail]/Alle Nachrichten - 37% - 3898 neu, 802 uebersprungen, 0 Fehler
+[2026-02-27 04:20:30]   Ordner: [Gmail]/Alle Nachrichten - 38% - 3998 neu, 802 uebersprungen, 0 Fehler
+[2026-02-27 04:21:11]   Ordner: [Gmail]/Alle Nachrichten - 39% - 4098 neu, 802 uebersprungen, 0 Fehler
+[2026-02-27 04:22:10]   Ordner: [Gmail]/Alle Nachrichten - 39% - 4197 neu, 803 uebersprungen, 0 Fehler
+[2026-02-27 04:23:46]   Ordner: [Gmail]/Alle Nachrichten - 40% - 4297 neu, 803 uebersprungen, 0 Fehler
+[2026-02-27 04:25:25]   Ordner: [Gmail]/Alle Nachrichten - 41% - 4397 neu, 803 uebersprungen, 0 Fehler
+[2026-02-27 04:27:46]   Ordner: [Gmail]/Alle Nachrichten - 42% - 4497 neu, 803 uebersprungen, 0 Fehler
+[2026-02-27 04:32:59]   Ordner: [Gmail]/Alle Nachrichten - 43% - 4597 neu, 803 uebersprungen, 0 Fehler
+[2026-02-27 04:37:53]   Ordner: [Gmail]/Alle Nachrichten - 43% - 4697 neu, 803 uebersprungen, 0 Fehler
+[2026-02-27 04:41:27]   Ordner: [Gmail]/Alle Nachrichten - 44% - 4784 neu, 816 uebersprungen, 0 Fehler
+[2026-02-27 04:43:31]   Ordner: [Gmail]/Alle Nachrichten - 45% - 4869 neu, 831 uebersprungen, 0 Fehler
+[2026-02-27 04:45:51]   Ordner: [Gmail]/Alle Nachrichten - 46% - 4916 neu, 884 uebersprungen, 0 Fehler
+[2026-02-27 04:49:48]   Ordner: [Gmail]/Alle Nachrichten - 47% - 4960 neu, 940 uebersprungen, 0 Fehler
+[2026-02-27 04:50:35]   Ordner: [Gmail]/Alle Nachrichten - 47% - 4987 neu, 1013 uebersprungen, 0 Fehler
+[2026-02-27 04:52:20]   Ordner: [Gmail]/Alle Nachrichten - 48% - 5022 neu, 1078 uebersprungen, 0 Fehler
+[2026-02-27 04:55:13]   Ordner: [Gmail]/Alle Nachrichten - 49% - 5052 neu, 1148 uebersprungen, 0 Fehler
+[2026-02-27 04:57:49]   Ordner: [Gmail]/Alle Nachrichten - 50% - 5093 neu, 1207 uebersprungen, 0 Fehler
+[2026-02-27 05:00:14]   Ordner: [Gmail]/Alle Nachrichten - 51% - 5136 neu, 1264 uebersprungen, 0 Fehler
+[2026-02-27 05:03:05]   Ordner: [Gmail]/Alle Nachrichten - 51% - 5175 neu, 1325 uebersprungen, 0 Fehler
+[2026-02-27 05:05:42]   Ordner: [Gmail]/Alle Nachrichten - 52% - 5205 neu, 1395 uebersprungen, 0 Fehler
+[2026-02-27 05:08:45]   Ordner: [Gmail]/Alle Nachrichten - 53% - 5238 neu, 1462 uebersprungen, 0 Fehler
+[2026-02-27 05:11:07]   Ordner: [Gmail]/Alle Nachrichten - 54% - 5284 neu, 1516 uebersprungen, 0 Fehler
+[2026-02-27 05:14:17]   Ordner: [Gmail]/Alle Nachrichten - 54% - 5325 neu, 1575 uebersprungen, 0 Fehler
+[2026-02-27 05:16:43]   Ordner: [Gmail]/Alle Nachrichten - 55% - 5369 neu, 1631 uebersprungen, 0 Fehler
+[2026-02-27 05:19:59]   Ordner: [Gmail]/Alle Nachrichten - 56% - 5410 neu, 1690 uebersprungen, 0 Fehler
+[2026-02-27 05:21:56]   Ordner: [Gmail]/Alle Nachrichten - 57% - 5453 neu, 1747 uebersprungen, 0 Fehler
+[2026-02-27 05:23:49]   Ordner: [Gmail]/Alle Nachrichten - 58% - 5497 neu, 1803 uebersprungen, 0 Fehler
+[2026-02-27 05:27:29]   Ordner: [Gmail]/Alle Nachrichten - 58% - 5537 neu, 1863 uebersprungen, 0 Fehler
+[2026-02-27 05:34:01]   Ordner: [Gmail]/Alle Nachrichten - 59% - 5557 neu, 1943 uebersprungen, 0 Fehler
+[2026-02-27 05:35:58]   Ordner: [Gmail]/Gesendet - 60% - 5557 neu, 2043 uebersprungen, 0 Fehler
+[2026-02-27 05:37:44]   Ordner: [Gmail]/Gesendet - 61% - 5557 neu, 2143 uebersprungen, 0 Fehler
+[2026-02-27 05:39:45]   Ordner: [Gmail]/Gesendet - 62% - 5557 neu, 2243 uebersprungen, 0 Fehler
+[2026-02-27 05:42:15]   Ordner: [Gmail]/Gesendet - 62% - 5557 neu, 2343 uebersprungen, 0 Fehler
+[2026-02-27 05:45:00]   Ordner: [Gmail]/Gesendet - 63% - 5557 neu, 2443 uebersprungen, 0 Fehler
+[2026-02-27 05:47:30]   Ordner: [Gmail]/Gesendet - 64% - 5557 neu, 2543 uebersprungen, 0 Fehler
+[2026-02-27 05:50:37]   Ordner: [Gmail]/Gesendet - 65% - 5557 neu, 2643 uebersprungen, 0 Fehler
+[2026-02-27 05:54:24]   Ordner: [Gmail]/Gesendet - 66% - 5557 neu, 2743 uebersprungen, 0 Fehler
+[2026-02-27 05:58:31]   Ordner: [Gmail]/Gesendet - 66% - 5557 neu, 2843 uebersprungen, 0 Fehler
+[2026-02-27 06:04:59]   Ordner: [Gmail]/Gesendet - 67% - 5557 neu, 2943 uebersprungen, 0 Fehler
+[2026-02-27 06:09:14]   Ordner: [Gmail]/Gesendet - 68% - 5557 neu, 3043 uebersprungen, 0 Fehler
+[2026-02-27 06:13:53]   Ordner: [Gmail]/Gesendet - 69% - 5557 neu, 3143 uebersprungen, 0 Fehler
+[2026-02-27 06:18:10]   Ordner: [Gmail]/Gesendet - 69% - 5557 neu, 3243 uebersprungen, 0 Fehler
+[2026-02-27 06:23:11]   Ordner: [Gmail]/Gesendet - 70% - 5557 neu, 3343 uebersprungen, 0 Fehler
+[2026-02-27 06:28:19]   Ordner: [Gmail]/Gesendet - 71% - 5557 neu, 3443 uebersprungen, 0 Fehler
+[2026-02-27 06:34:24]   Ordner: [Gmail]/Gesendet - 72% - 5557 neu, 3543 uebersprungen, 0 Fehler
+[2026-02-27 06:39:25]   Ordner: [Gmail]/Gesendet - 73% - 5557 neu, 3643 uebersprungen, 0 Fehler
+[2026-02-27 06:43:36]   Ordner: [Gmail]/Gesendet - 73% - 5557 neu, 3743 uebersprungen, 0 Fehler
+[2026-02-27 06:50:27]   Ordner: [Gmail]/Papierkorb - 74% - 5570 neu, 3830 uebersprungen, 0 Fehler
+[2026-02-27 06:55:07]   Ordner: [Gmail]/Wichtig - 75% - 5588 neu, 3912 uebersprungen, 0 Fehler
+[2026-02-27 06:59:22]   Ordner: [Gmail]/Wichtig - 76% - 5588 neu, 4012 uebersprungen, 0 Fehler
+[2026-02-27 07:03:15]   Ordner: [Gmail]/Wichtig - 77% - 5588 neu, 4112 uebersprungen, 0 Fehler
+[2026-02-27 07:07:38]   Ordner: [Gmail]/Wichtig - 77% - 5588 neu, 4212 uebersprungen, 0 Fehler
+[2026-02-27 07:12:25]   Ordner: [Gmail]/Wichtig - 78% - 5588 neu, 4312 uebersprungen, 0 Fehler
+[2026-02-27 07:18:28]   Ordner: [Gmail]/Wichtig - 79% - 5588 neu, 4412 uebersprungen, 0 Fehler
+[2026-02-27 07:23:48]   Ordner: [Gmail]/Wichtig - 80% - 5588 neu, 4512 uebersprungen, 0 Fehler
+[2026-02-27 07:29:05]   Ordner: [Gmail]/Wichtig - 81% - 5588 neu, 4612 uebersprungen, 0 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 81% - 5588 neu, 4696 uebersprungen, 16 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 82% - 5588 neu, 4696 uebersprungen, 116 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 83% - 5588 neu, 4696 uebersprungen, 216 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 84% - 5588 neu, 4696 uebersprungen, 316 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 84% - 5588 neu, 4696 uebersprungen, 416 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 85% - 5588 neu, 4696 uebersprungen, 516 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 86% - 5588 neu, 4696 uebersprungen, 616 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 87% - 5588 neu, 4696 uebersprungen, 716 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 88% - 5588 neu, 4696 uebersprungen, 816 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 88% - 5588 neu, 4696 uebersprungen, 916 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 89% - 5588 neu, 4696 uebersprungen, 1016 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 90% - 5588 neu, 4696 uebersprungen, 1116 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 91% - 5588 neu, 4696 uebersprungen, 1216 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 92% - 5588 neu, 4696 uebersprungen, 1316 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 92% - 5588 neu, 4696 uebersprungen, 1416 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 93% - 5588 neu, 4696 uebersprungen, 1516 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 94% - 5588 neu, 4696 uebersprungen, 1616 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 95% - 5588 neu, 4696 uebersprungen, 1716 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 96% - 5588 neu, 4696 uebersprungen, 1816 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 96% - 5588 neu, 4696 uebersprungen, 1916 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 97% - 5588 neu, 4696 uebersprungen, 2016 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 98% - 5588 neu, 4696 uebersprungen, 2116 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 99% - 5588 neu, 4696 uebersprungen, 2216 Fehler
+[2026-02-27 07:33:17]   Ordner: [Gmail]/Wichtig - 99% - 5588 neu, 4696 uebersprungen, 2316 Fehler
+[2026-02-27 07:33:17]   FEHLER: socket error: EOF occurred in violation of protocol (_ssl.c:2406)
+[2026-02-27 07:33:17] Aktualisiere Sender-Statistiken...
+[2026-02-27 07:33:19] === Nightly Scan beendet in 16398s - 0 neue Mails ===
+[2026-02-28 02:00:02] === Nightly Scan gestartet ===
+[2026-02-28 02:00:02] Scanne Account: Gmail Armin (armin.leistenschneider@gmail.com)
+[2026-02-28 02:12:49]   Ordner: INBOX - 14% - 0 neu, 100 uebersprungen, 0 Fehler
+[2026-02-28 02:26:11]   Ordner: INBOX - 28% - 0 neu, 200 uebersprungen, 0 Fehler
+[2026-03-01 02:00:02] === Nightly Scan gestartet ===
+[2026-03-01 02:00:02] Scanne Account: Gmail Armin (armin.leistenschneider@gmail.com)
+[2026-03-01 02:03:19]   Ordner: INBOX - 56% - 0 neu, 100 uebersprungen, 0 Fehler
+[2026-03-01 02:05:34]   Fertig: 1 neu, 178 uebersprungen, 0 Fehler
+[2026-03-01 02:05:34] Bewerte 1 neue Mails...
+[2026-03-01 02:05:39]   1064 Mails bewertet
+[2026-03-01 02:05:39] Aktualisiere Sender-Statistiken...
+[2026-03-01 02:05:42] === Nightly Scan beendet in 340s - 1 neue Mails ===

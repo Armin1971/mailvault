@@ -8,7 +8,7 @@
 </div>
 
 <!-- Task-Toast -->
-<div id="taskToast" class="task-toast" style="display:none">
+<div id="taskToast" class="task-toast" style="display:none; position:fixed; bottom:1.5rem; right:1.5rem; z-index:999; min-width:300px;">
     <div class="toast-header">
         <span id="toastTitle">Loesche...</span>
         <button onclick="document.getElementById('taskToast').style.display='none'" class="flash-close">&times;</button>
@@ -55,6 +55,13 @@
         </select>
     </div>
     <div class="filter-group">
+        <label>Sortierung:</label>
+        <a href="?sort=count&order=desc&category={{ current_category }}" class="btn btn-sm {% if current_sort == 'count' %}btn-primary{% endif %}">Anzahl</a>
+        <a href="?sort=score&order=asc&category={{ current_category }}" class="btn btn-sm {% if current_sort == 'score' %}btn-primary{% endif %}">Score</a>
+        <a href="?sort=score_count&category={{ current_category }}" class="btn btn-sm {% if current_sort == 'score_count' %}btn-primary{% endif %}">Score+Anzahl</a>
+        <a href="?sort=last&order=desc&category={{ current_category }}" class="btn btn-sm {% if current_sort == 'last' %}btn-primary{% endif %}">Datum</a>
+    </div>
+    <div class="filter-group">
         <form method="POST" action="{{ url_for('bulk_delete_low_score') }}" class="inline-form"
               onsubmit="return confirm('Wirklich alle Mails mit niedrigem Score loeschen?')">
             <label>Bulk-Delete Score &lt;</label>
@@ -64,12 +71,20 @@
     </div>
 </div>
 
+<!-- Bulk-Aktionsleiste -->
+<div id="bulkBar" style="display:none; position:fixed; bottom:1.5rem; left:50%; transform:translateX(-50%); z-index:998; background:var(--card-bg); border:1px solid var(--accent); border-radius:8px; padding:0.75rem 1.25rem; display:none; align-items:center; gap:1rem; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+    <span id="bulkCount">0 ausgewaehlt</span>
+    <button class="btn btn-danger btn-sm" onclick="bulkDeleteSelected()">Ausgewaehlte loeschen</button>
+    <button class="btn btn-sm" onclick="clearSelection()">Abbrechen</button>
+</div>
+
 <!-- Absender-Tabelle -->
 {% if senders %}
 <div class="table-wrapper">
     <table class="data-table">
         <thead>
             <tr>
+                <th style="width:30px"><input type="checkbox" id="checkAllSenders" onchange="toggleAllSenders()"></th>
                 <th>
                     <a href="?sort=email&order={{ 'asc' if current_sort == 'email' and current_order == 'desc' else 'desc' }}&category={{ current_category }}" class="sort-link {% if current_sort == 'email' %}active{% endif %}">Absender</a>
                 </th>
@@ -89,6 +104,7 @@
         <tbody>
             {% for sender in senders %}
             <tr class="{% if sender.is_blocked %}row-blocked{% endif %} {% if sender.avg_score < 25 %}row-low-score{% endif %}" id="sender-row-{{ sender.id }}">
+                <td><input type="checkbox" class="sender-check" value="{{ sender.id }}" data-email="{{ sender.email }}" data-count="{{ sender.mail_count }}" onchange="updateBulkBar()"></td>
                 <td>
                     <div class="sender-info">
                         <span class="sender-name">{{ sender.display_name or '–' }}</span>
@@ -138,6 +154,117 @@ function applyFilter() {
     window.location.search = params.toString();
 }
 
+// ─── Checkbox / Bulk-Auswahl ───
+function toggleAllSenders() {
+    var checked = document.getElementById('checkAllSenders').checked;
+    document.querySelectorAll('.sender-check').forEach(function(cb) { cb.checked = checked; });
+    updateBulkBar();
+}
+
+function updateBulkBar() {
+    var checked = document.querySelectorAll('.sender-check:checked');
+    var bar = document.getElementById('bulkBar');
+    if (checked.length > 0) {
+        var totalMails = 0;
+        checked.forEach(function(cb) { totalMails += parseInt(cb.getAttribute('data-count') || 0); });
+        document.getElementById('bulkCount').textContent = checked.length + ' Absender (' + totalMails + ' Mails) ausgewaehlt';
+        bar.style.display = 'flex';
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
+function clearSelection() {
+    document.getElementById('checkAllSenders').checked = false;
+    document.querySelectorAll('.sender-check').forEach(function(cb) { cb.checked = false; });
+    updateBulkBar();
+}
+
+function bulkDeleteSelected() {
+    var checked = document.querySelectorAll('.sender-check:checked');
+    if (checked.length === 0) return;
+
+    var senderIds = [];
+    var totalMails = 0;
+    checked.forEach(function(cb) {
+        senderIds.push(parseInt(cb.value));
+        totalMails += parseInt(cb.getAttribute('data-count') || 0);
+    });
+
+    if (!confirm(checked.length + ' Absender mit insgesamt ' + totalMails + ' Mails loeschen?')) return;
+
+    // Bulk-Bar ausblenden
+    document.getElementById('bulkBar').style.display = 'none';
+
+    // Toast zeigen
+    var toast = document.getElementById('taskToast');
+    document.getElementById('toastTitle').textContent = 'Bulk-Delete: ' + checked.length + ' Absender';
+    document.getElementById('toastFill').style.width = '0%';
+    document.getElementById('toastFill').className = 'progress-fill';
+    document.getElementById('toastDetail').textContent = 'Starte...';
+    toast.style.display = 'block';
+
+    fetch('/api/bulk-delete-senders', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({sender_ids: senderIds})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.task_id) {
+            watchBulkTask(data.task_id, senderIds);
+        } else {
+            document.getElementById('toastDetail').textContent = 'Fehler: ' + (data.error || 'Unbekannt');
+        }
+    })
+    .catch(function(err) {
+        document.getElementById('toastDetail').textContent = 'Fehler: ' + err;
+    });
+}
+
+function watchBulkTask(taskId, senderIds) {
+    var interval = setInterval(function() {
+        fetch('/api/task/' + taskId)
+        .then(function(r) { return r.json(); })
+        .then(function(task) {
+            var pct = task.total > 0 ? Math.round(task.progress / task.total * 100) : 0;
+            document.getElementById('toastFill').style.width = pct + '%';
+            document.getElementById('toastDetail').textContent = task.detail || task.message || '';
+
+            if (task.status === 'done') {
+                clearInterval(interval);
+                document.getElementById('toastFill').style.width = '100%';
+                document.getElementById('toastFill').classList.add('progress-done');
+                document.getElementById('toastTitle').textContent = 'Geloescht!';
+                var deleted = task.result ? task.result.deleted : 0;
+                document.getElementById('toastDetail').textContent = deleted + ' Mails von ' + senderIds.length + ' Absendern geloescht';
+
+                // Rows entfernen
+                senderIds.forEach(function(id) {
+                    var row = document.getElementById('sender-row-' + id);
+                    if (row) {
+                        row.style.transition = 'opacity 0.3s';
+                        row.style.opacity = '0';
+                        setTimeout(function() { row.remove(); }, 300);
+                    }
+                });
+
+                setTimeout(function() {
+                    document.getElementById('taskToast').style.display = 'none';
+                }, 3000);
+            }
+
+            if (task.status === 'error') {
+                clearInterval(interval);
+                document.getElementById('toastTitle').textContent = 'Fehler!';
+                document.getElementById('toastFill').classList.add('progress-error');
+                document.getElementById('toastDetail').textContent = task.error || 'Unbekannt';
+            }
+        });
+    }, 1000);
+}
+
+// ─── Einzel-Delete ───
 var deleteInProgress = false;
 
 function deleteSender(senderId, senderEmail, count) {
@@ -235,7 +362,7 @@ function watchDeleteTask(taskId, senderId) {
                         setTimeout(function() { row.remove(); }, 500);
                     }
                     setTimeout(function() {
-                        document.getElementById('taskToast').style.display = 'none';
+                        toast.style.display = 'none';
                     }, 2000);
                 }, 1000);
             }

@@ -1,0 +1,466 @@
+{% extends "base.html" %}
+{% block title %}Ordner – MailVault{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Ordner-Verwaltung <button class="btn btn-sm" onclick="loadData(true)" style="margin-left:1rem">Neu laden</button></h1>
+    <p class="subtitle">Ordnerstruktur, verwaiste Mails, Verschieben</p>
+</div>
+
+<!-- Lade-Status -->
+<div id="loadingPanel" class="progress-panel">
+    <div class="progress-bar-container">
+        <div class="progress-bar">
+            <div class="progress-fill" id="loadFill" style="width: 30%"></div>
+        </div>
+    </div>
+    <p id="loadStatus">Verbinde mit IMAP-Server und scanne Ordner...</p>
+</div>
+
+<!-- Mail-Vorschau Modal -->
+<div id="previewModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:1000; overflow-y:auto;">
+    <div style="max-width:700px; margin:3rem auto; background:var(--card-bg); border-radius:8px; border:1px solid var(--border); padding:1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1rem;">
+            <h3 id="previewSubject" style="margin:0; flex:1;">Lade...</h3>
+            <button onclick="closePreview()" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer; padding:0 0.5rem;">&times;</button>
+        </div>
+        <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">
+            <div><strong>Von:</strong> <span id="previewFrom"></span></div>
+            <div><strong>An:</strong> <span id="previewTo"></span></div>
+            <div><strong>Datum:</strong> <span id="previewDate"></span></div>
+            <div><strong>Groesse:</strong> <span id="previewSize"></span></div>
+        </div>
+        <hr style="border-color:var(--border); margin:0.5rem 0;">
+        <div id="previewAttachments" style="display:none; margin:0.5rem 0;">
+            <strong style="font-size:0.85rem;">Anhaenge:</strong>
+            <div id="attachmentList" style="font-size:0.8rem; margin-top:0.25rem;"></div>
+        </div>
+        <div id="previewBody" style="white-space:pre-wrap; font-size:0.85rem; max-height:400px; overflow-y:auto; padding:0.5rem 0;"></div>
+        <hr style="border-color:var(--border); margin:0.5rem 0;">
+        <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+            <select id="previewMoveTarget" style="flex:1;"></select>
+            <button class="btn btn-primary btn-sm" onclick="moveFromPreview()">Verschieben</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteFromPreview()">Loeschen</button>
+        </div>
+    </div>
+</div>
+
+<!-- Inhalt -->
+<div id="mainContent" style="display:none">
+    <div class="stats-grid" id="statsGrid"></div>
+
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="showTab('folders', this)">Ordner-Uebersicht</button>
+        <button class="tab-btn" onclick="showTab('orphans', this)">Verwaiste Mails</button>
+    </div>
+
+    <div id="tab-folders" class="tab-content" style="display:block;">
+        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:0.5rem;">Gmail verwendet Labels statt Ordner – Mails koennen mehrere Labels haben.</p>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr><th>Label</th><th>Typ</th><th>Mails</th><th>Balken</th></tr>
+                </thead>
+                <tbody id="folderBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="tab-orphans" class="tab-content" style="display:none;">
+        <div class="toolbar">
+            <div class="filter-group">
+                <label>Verschieben nach:</label>
+                <select id="moveTarget"></select>
+                <button class="btn btn-sm" onclick="createNewFolder()">Neuer Ordner</button>
+            </div>
+            <div class="filter-group">
+                <button class="btn btn-primary btn-sm" onclick="moveSelected()">Ausgewaehlte verschieben</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteSelected()">Ausgewaehlte loeschen</button>
+                <button class="btn btn-sm" onclick="selectAll()">Alle auswaehlen</button>
+            </div>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="checkAll" onchange="toggleAll()"></th>
+                        <th>Groesse</th>
+                        <th>Betreff</th>
+                        <th>Von</th>
+                        <th>Datum</th>
+                    </tr>
+                </thead>
+                <tbody id="orphanBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var scanData = null;
+var currentPreviewUid = null;
+var orphanCountDisplay = 0;
+var orphanSizeDisplay = 0;
+
+function formatSize(bytes) {
+    if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
+    if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+    if (bytes >= 1024) return Math.round(bytes / 1024) + ' KB';
+    return bytes + ' B';
+}
+
+function showTab(name, btn) {
+    var tabs = document.querySelectorAll('.tab-content');
+    var btns = document.querySelectorAll('.tab-btn');
+    for (var i = 0; i < tabs.length; i++) {
+        tabs[i].style.display = 'none';
+        btns[i].classList.remove('active');
+    }
+    document.getElementById('tab-' + name).style.display = 'block';
+    btn.classList.add('active');
+}
+
+// ─── Daten laden mit Cache + Background-Task ───
+function loadData(forceRefresh) {
+    var cached = null;
+    try { cached = JSON.parse(sessionStorage.getItem('ordnerData')); } catch(e) {}
+
+    if (cached && !forceRefresh) {
+        scanData = cached;
+        document.getElementById('loadingPanel').style.display = 'none';
+        document.getElementById('mainContent').style.display = 'block';
+        renderData(cached);
+        return;
+    }
+
+    document.getElementById('loadingPanel').style.display = 'block';
+    document.getElementById('mainContent').style.display = 'none';
+    document.getElementById('loadStatus').textContent = 'Starte Ordner-Scan...';
+    document.getElementById('loadFill').style.width = '5%';
+
+    fetch('/api/ordner/scan')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.task_id) {
+            pollTask(data.task_id);
+        } else if (data.error) {
+            document.getElementById('loadStatus').textContent = 'Fehler: ' + data.error;
+        }
+    })
+    .catch(function(err) {
+        document.getElementById('loadStatus').textContent = 'Fehler: ' + err;
+    });
+}
+
+function pollTask(taskId) {
+    var interval = setInterval(function() {
+        fetch('/api/task/' + taskId)
+        .then(function(r) { return r.json(); })
+        .then(function(task) {
+            // Fortschritt anzeigen
+            var pct = task.total > 0 ? Math.round(task.progress / task.total * 100) : 10;
+            document.getElementById('loadFill').style.width = pct + '%';
+            document.getElementById('loadStatus').textContent = task.message + ' ' + (task.detail || '');
+
+            if (task.status === 'done') {
+                clearInterval(interval);
+                scanData = task.result;
+                try { sessionStorage.setItem('ordnerData', JSON.stringify(task.result)); } catch(e) {}
+                document.getElementById('loadingPanel').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+                renderData(task.result);
+            } else if (task.status === 'error') {
+                clearInterval(interval);
+                document.getElementById('loadStatus').textContent = 'Fehler: ' + task.error;
+                document.getElementById('loadFill').style.background = '#ef4444';
+            }
+        })
+        .catch(function(err) {
+            clearInterval(interval);
+            document.getElementById('loadStatus').textContent = 'Verbindungsfehler: ' + err;
+        });
+    }, 2000);
+}
+
+loadData(false);
+
+// ─── Stats aktualisieren ───
+function updateStats() {
+    // Echte Gesamtzahl = Alle Nachrichten (nicht Summe aller Labels)
+    var totalMails = 0;
+    scanData.folders.forEach(function(f) {
+        if (f.name.indexOf('Alle Nachrichten') !== -1 || f.name.indexOf('All Mail') !== -1) {
+            totalMails = f.count;
+        }
+    });
+    // Fallback: aus DB-Stat oder Summe wenn kein Alle Nachrichten
+    if (totalMails === 0) {
+        totalMails = scanData.folders.reduce(function(s, f) { return s + f.count; }, 0);
+    }
+
+    var userLabels = scanData.folders.filter(function(f) { return !f.name.startsWith('[Gmail]') && f.name !== 'INBOX'; }).length;
+
+    var statsHtml =
+        '<div class="stat-card"><div class="stat-value">' + totalMails + '</div><div class="stat-label">Mails gesamt</div></div>' +
+        '<div class="stat-card"><div class="stat-value">' + scanData.folders.length + '</div><div class="stat-label">Labels (davon ' + userLabels + ' eigene)</div></div>' +
+        '<div class="stat-card stat-card-warn"><div class="stat-value">' + orphanCountDisplay + '</div><div class="stat-label">Verwaiste Mails</div></div>' +
+        '<div class="stat-card"><div class="stat-value">' + formatSize(orphanSizeDisplay) + '</div><div class="stat-label">Verwaiste Groesse</div></div>';
+    document.getElementById('statsGrid').innerHTML = statsHtml;
+}
+
+// ─── Daten rendern ───
+function renderData(data) {
+    orphanCountDisplay = data.orphan_count;
+    orphanSizeDisplay = data.orphan_total_size;
+    updateStats();
+
+    // Ordner-Tabelle
+    var maxCount = data.folders.length > 0 ? data.folders[0].count : 1;
+    var html = '';
+    data.folders.forEach(function(f) {
+        var pct = Math.round(f.count / maxCount * 100);
+        var typ = 'Eigenes Label';
+        if (f.name === 'INBOX') typ = 'Posteingang';
+        else if (f.name.indexOf('Alle Nachrichten') !== -1 || f.name.indexOf('All Mail') !== -1) typ = 'Alle Mails';
+        else if (f.name.indexOf('Gesendet') !== -1 || f.name.indexOf('Sent') !== -1) typ = 'System';
+        else if (f.name.indexOf('Papierkorb') !== -1 || f.name.indexOf('Trash') !== -1) typ = 'System';
+        else if (f.name.indexOf('Spam') !== -1) typ = 'System';
+        else if (f.name.indexOf('Wichtig') !== -1 || f.name.indexOf('Important') !== -1) typ = 'Auto-Label';
+        else if (f.name.indexOf('Markiert') !== -1 || f.name.indexOf('Starred') !== -1) typ = 'Auto-Label';
+        else if (f.name.indexOf('Entw') !== -1 || f.name.indexOf('Draft') !== -1) typ = 'System';
+        else if (f.name.startsWith('[Gmail]')) typ = 'System';
+
+        var typClass = typ === 'Eigenes Label' ? 'color:var(--accent)' : 'color:var(--text-muted)';
+        html += '<tr><td>' + f.name + '</td><td style="' + typClass + '; font-size:0.8rem;">' + typ + '</td><td>' + f.count + '</td>' +
+            '<td><div class="size-bar"><div class="size-fill" style="width:' + pct + '%"></div></div></td></tr>';
+    });
+    document.getElementById('folderBody').innerHTML = html;
+
+    // Verwaiste Mails
+    renderOrphans(data.orphan_mails);
+
+    // Dropdown fuer Verschieben
+    populateFolderDropdown('moveTarget');
+    populateFolderDropdown('previewMoveTarget');
+}
+
+function renderOrphans(mails) {
+    var ohtml = '';
+    mails.forEach(function(m) {
+        var sizeClass = m.size >= 5242880 ? 'size-huge' : m.size >= 1048576 ? 'size-large' : m.size >= 102400 ? 'size-medium' : 'size-small';
+        ohtml += '<tr data-uid="' + m.uid + '" data-size="' + m.size + '">' +
+            '<td><input type="checkbox" class="orphan-check" value="' + m.uid + '"></td>' +
+            '<td><span class="size-badge ' + sizeClass + '">' + formatSize(m.size) + '</span></td>' +
+            '<td class="subject-cell" style="cursor:pointer; text-decoration:underline;" title="' + m.subject.replace(/"/g, '&quot;') + '" onclick="openPreview(\'' + m.uid + '\')">' + m.subject.substring(0, 60) + '</td>' +
+            '<td class="sender-email">' + m.from.substring(0, 50) + '</td>' +
+            '<td class="date-cell">' + m.date.substring(0, 16) + '</td>' +
+            '</tr>';
+    });
+    if (mails.length === 0) {
+        ohtml = '<tr><td colspan="5" style="text-align:center;padding:2rem">Keine verwaisten Mails gefunden</td></tr>';
+    }
+    document.getElementById('orphanBody').innerHTML = ohtml;
+}
+
+function populateFolderDropdown(selectId) {
+    var select = document.getElementById(selectId);
+    select.innerHTML = '<option value="">-- Zielordner waehlen --</option>';
+    scanData.folders.forEach(function(f) {
+        if (!f.name.startsWith('[Gmail]/') || f.name === '[Gmail]/Papierkorb') {
+            select.innerHTML += '<option value="' + f.name + '">' + f.name + '</option>';
+        }
+    });
+}
+
+// ─── Checkboxen ───
+function toggleAll() {
+    var checked = document.getElementById('checkAll').checked;
+    document.querySelectorAll('.orphan-check').forEach(function(b) { b.checked = checked; });
+}
+
+function selectAll() {
+    document.getElementById('checkAll').checked = true;
+    toggleAll();
+}
+
+function getSelectedUids() {
+    var uids = [];
+    document.querySelectorAll('.orphan-check:checked').forEach(function(b) { uids.push(b.value); });
+    return uids;
+}
+
+// ─── Verschieben ───
+function moveSelected() {
+    var uids = getSelectedUids();
+    var target = document.getElementById('moveTarget').value;
+
+    if (uids.length === 0) { alert('Keine Mails ausgewaehlt.'); return; }
+    if (!target) { alert('Bitte Zielordner waehlen.'); return; }
+    if (!confirm(uids.length + ' Mails nach "' + target + '" verschieben?')) return;
+
+    doMove(uids, target);
+}
+
+function doMove(uids, target) {
+    fetch('/api/mail/move', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            uids: uids,
+            source_folder: scanData.all_mail_folder,
+            target_folder: target
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(result) {
+        if (result.moved > 0) {
+            alert(result.moved + ' Mails verschoben!');
+            removeOrphanRows(uids);
+        }
+        if (result.error) {
+            alert('Fehler: ' + result.error);
+        }
+    })
+    .catch(function(err) { alert('Fehler: ' + err); });
+}
+
+// ─── Loeschen ───
+function deleteSelected() {
+    var uids = getSelectedUids();
+    if (uids.length === 0) { alert('Keine Mails ausgewaehlt.'); return; }
+    if (!confirm(uids.length + ' Mails endgueltig loeschen?')) return;
+
+    doMove(uids, '[Gmail]/Papierkorb');
+}
+
+// ─── Rows entfernen + Zaehler aktualisieren ───
+function removeOrphanRows(uids) {
+    var removedSize = 0;
+    uids.forEach(function(uid) {
+        var row = document.querySelector('tr[data-uid="' + uid + '"]');
+        if (row) {
+            removedSize += parseInt(row.getAttribute('data-size') || '0');
+            row.style.transition = 'opacity 0.3s';
+            row.style.opacity = '0';
+            setTimeout(function() { row.remove(); }, 300);
+        }
+    });
+
+    orphanCountDisplay -= uids.length;
+    orphanSizeDisplay -= removedSize;
+    if (orphanCountDisplay < 0) orphanCountDisplay = 0;
+    if (orphanSizeDisplay < 0) orphanSizeDisplay = 0;
+
+    // Cache aktualisieren
+    if (scanData) {
+        scanData.orphan_count = orphanCountDisplay;
+        scanData.orphan_total_size = orphanSizeDisplay;
+        scanData.orphan_mails = scanData.orphan_mails.filter(function(m) {
+            return uids.indexOf(m.uid) === -1;
+        });
+        try { sessionStorage.setItem('ordnerData', JSON.stringify(scanData)); } catch(e) {}
+    }
+
+    setTimeout(updateStats, 350);
+}
+
+// ─── Mail-Vorschau ───
+function openPreview(uid) {
+    currentPreviewUid = uid;
+    document.getElementById('previewModal').style.display = 'block';
+    document.getElementById('previewSubject').textContent = 'Lade...';
+    document.getElementById('previewFrom').textContent = '';
+    document.getElementById('previewTo').textContent = '';
+    document.getElementById('previewDate').textContent = '';
+    document.getElementById('previewSize').textContent = '';
+    document.getElementById('previewBody').textContent = '';
+    document.getElementById('previewAttachments').style.display = 'none';
+
+    var folder = scanData.all_mail_folder || '[Gmail]/Alle Nachrichten';
+    fetch('/api/mail/preview/' + uid + '?folder=' + encodeURIComponent(folder))
+    .then(function(r) { return r.json(); })
+    .then(function(mail) {
+        if (mail.error) {
+            document.getElementById('previewBody').textContent = 'Fehler: ' + mail.error;
+            return;
+        }
+        document.getElementById('previewSubject').textContent = mail.subject || '(kein Betreff)';
+        document.getElementById('previewFrom').textContent = mail.from;
+        document.getElementById('previewTo').textContent = mail.to;
+        document.getElementById('previewDate').textContent = mail.date;
+        document.getElementById('previewSize').textContent = formatSize(mail.size);
+        document.getElementById('previewBody').textContent = mail.body || '(kein Text)';
+
+        // Anhaenge anzeigen
+        if (mail.attachments && mail.attachments.length > 0) {
+            document.getElementById('previewAttachments').style.display = 'block';
+            var attHtml = '';
+            mail.attachments.forEach(function(att) {
+                attHtml += '<div style="display:inline-block; background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:0.25rem 0.5rem; margin:0.2rem;">📎 ' +
+                    att.name + ' <span style="color:var(--text-muted);">(' + formatSize(att.size) + ')</span></div>';
+            });
+            document.getElementById('attachmentList').innerHTML = attHtml;
+        } else {
+            document.getElementById('previewAttachments').style.display = 'none';
+        }
+    })
+    .catch(function(err) {
+        document.getElementById('previewBody').textContent = 'Fehler: ' + err;
+    });
+}
+
+function closePreview() {
+    document.getElementById('previewModal').style.display = 'none';
+    currentPreviewUid = null;
+}
+
+function moveFromPreview() {
+    var target = document.getElementById('previewMoveTarget').value;
+    if (!target) { alert('Bitte Zielordner waehlen.'); return; }
+    if (!currentPreviewUid) return;
+
+    closePreview();
+    doMove([currentPreviewUid], target);
+}
+
+function deleteFromPreview() {
+    if (!currentPreviewUid) return;
+    if (!confirm('Diese Mail endgueltig loeschen?')) return;
+
+    closePreview();
+    doMove([currentPreviewUid], '[Gmail]/Papierkorb');
+}
+
+// ─── Neuer Ordner ───
+function createNewFolder() {
+    var name = prompt('Neuer Ordnername:');
+    if (!name || !name.trim()) return;
+
+    fetch('/api/folder/create', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name.trim()})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(result) {
+        if (result.success) {
+            alert('Ordner "' + result.folder + '" angelegt!');
+            scanData.folders.push({name: result.folder, count: 0, est_size: 0});
+            populateFolderDropdown('moveTarget');
+            populateFolderDropdown('previewMoveTarget');
+            document.getElementById('moveTarget').value = result.folder;
+        } else {
+            alert('Fehler: ' + (result.error || 'Unbekannt'));
+        }
+    })
+    .catch(function(err) { alert('Fehler: ' + err); });
+}
+
+// ESC schliesst Modal
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closePreview();
+});
+</script>
+{% endblock %}

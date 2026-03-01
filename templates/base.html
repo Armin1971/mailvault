@@ -15,6 +15,7 @@
         <div class="nav-links">
             <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">Dashboard</a>
             <a href="{{ url_for('analyse') }}" class="{% if request.endpoint == 'analyse' %}active{% endif %}">Analyse</a>
+            <a href="{{ url_for('ordner') }}" class="{% if request.endpoint == 'ordner' %}active{% endif %}">Ordner</a>
             <a href="{{ url_for('scan') }}" class="{% if request.endpoint == 'scan' %}active{% endif %}">Scan</a>
             <a href="{{ url_for('settings') }}" class="{% if request.endpoint == 'settings' %}active{% endif %}">Einstellungen</a>
         </div>

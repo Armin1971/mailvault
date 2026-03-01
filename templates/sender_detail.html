@@ -1,17 +1,30 @@
 {% extends "base.html" %}
 {% block title %}{{ sender.display_name or sender.email }} – MailVault{% endblock %}
-
 {% block content %}
 <div class="page-header">
-    <a href="{{ url_for('dashboard') }}" class="back-link">← Dashboard</a>
+    <a href="{{ request.args.get('back', url_for('dashboard')) }}" class="back-link">← Dashboard</a>
     <h1>{{ sender.display_name or sender.email }}</h1>
     <p class="subtitle">{{ sender.email }}{% if sender.display_name %} · {{ sender.display_name }}{% endif %}</p>
+</div>
+
+<!-- Toast -->
+<div id="taskToast" class="task-toast" style="display:none; position:fixed; bottom:1.5rem; right:1.5rem; z-index:999; min-width:300px;">
+    <div class="toast-header">
+        <span id="toastTitle">Loesche...</span>
+        <button onclick="document.getElementById('taskToast').style.display='none'" class="flash-close">&times;</button>
+    </div>
+    <div class="progress-bar-container progress-bar-sm">
+        <div class="progress-bar">
+            <div class="progress-fill" id="toastFill" style="width:0%"></div>
+        </div>
+    </div>
+    <div id="toastDetail" class="toast-detail">Starte...</div>
 </div>
 
 <!-- Sender-Stats -->
 <div class="stats-grid stats-grid-sm">
     <div class="stat-card">
-        <div class="stat-value">{{ sender.mail_count }}</div>
+        <div class="stat-value" id="mailCount">{{ sender.mail_count }}</div>
         <div class="stat-label">Mails</div>
     </div>
     <div class="stat-card">
@@ -34,19 +47,16 @@
 
 <!-- Aktionen -->
 <div class="toolbar">
-    <form method="POST" action="{{ url_for('delete_sender_mails', sender_id=sender.id) }}"
-          onsubmit="return confirm('Wirklich ALLE {{ sender.mail_count }} Mails von diesem Absender löschen?')">
-        <button type="submit" class="btn btn-danger">Alle Mails dieses Absenders löschen</button>
-    </form>
-    <form method="POST" action="{{ url_for('delete_selected_mails') }}" id="deleteSelectedForm">
-        <button type="submit" class="btn btn-warning" onclick="return confirm('Ausgewählte Mails löschen?')">
-            Ausgewählte löschen
-        </button>
-    </form>
+    <button class="btn btn-danger" id="deleteAllBtn"
+            onclick="deleteAllMails({{ sender.id }}, '{{ sender.email }}', {{ sender.mail_count }})">
+        Alle Mails dieses Absenders loeschen
+    </button>
+    <button class="btn btn-warning" onclick="deleteSelectedMails()">
+        Ausgewaehlte loeschen
+    </button>
 </div>
 
 <!-- Mail-Tabelle -->
-<form method="POST" action="{{ url_for('delete_selected_mails') }}" id="mailListForm">
 <div class="table-wrapper">
     <table class="data-table">
         <thead>
@@ -55,26 +65,27 @@
                     <input type="checkbox" id="selectAll" onchange="toggleAll(this)">
                 </th>
                 <th>
-                    <a href="?sort=subject&order={{ 'asc' if current_sort == 'subject' and current_order == 'desc' else 'desc' }}"
+                    <a href="?sort=subject&order={{ 'asc' if current_sort == 'subject' and current_order == 'desc' else 'desc' }}{% if request.args.get('back') %}&back={{ request.args.get('back')|urlencode }}{% endif %}"
                        class="sort-link">Betreff</a>
                 </th>
                 <th>
-                    <a href="?sort=date&order={{ 'asc' if current_sort == 'date' and current_order == 'desc' else 'desc' }}"
+                    <a href="?sort=date&order={{ 'asc' if current_sort == 'date' and current_order == 'desc' else 'desc' }}{% if request.args.get('back') %}&back={{ request.args.get('back')|urlencode }}{% endif %}"
                        class="sort-link">Datum</a>
                 </th>
                 <th>
-                    <a href="?sort=score&order={{ 'asc' if current_sort == 'score' and current_order == 'desc' else 'desc' }}"
+                    <a href="?sort=score&order={{ 'asc' if current_sort == 'score' and current_order == 'desc' else 'desc' }}{% if request.args.get('back') %}&back={{ request.args.get('back')|urlencode }}{% endif %}"
                        class="sort-link">Score</a>
                 </th>
                 <th>Flags</th>
+                <th>Label</th>
                 <th>Vorschau</th>
             </tr>
         </thead>
         <tbody>
             {% for mail in mails %}
-            <tr class="{% if mail.score < 25 %}row-low-score{% elif mail.score > 70 %}row-high-score{% endif %}">
+            <tr id="mail-row-{{ mail.id }}" class="{% if mail.score < 25 %}row-low-score{% elif mail.score > 70 %}row-high-score{% endif %}">
                 <td class="check-col">
-                    <input type="checkbox" name="mail_ids" value="{{ mail.id }}">
+                    <input type="checkbox" class="mail-check" value="{{ mail.id }}">
                 </td>
                 <td class="subject-cell">{{ mail.subject or '(kein Betreff)' }}</td>
                 <td class="date-cell">
@@ -89,10 +100,11 @@
                 </td>
                 <td class="flags-cell">
                     {% if mail.has_unsubscribe %}<span class="flag" title="Hat Unsubscribe-Header">📧</span>{% endif %}
-                    {% if mail.has_attachments %}<span class="flag" title="Hat Anhänge">📎</span>{% endif %}
+                    {% if mail.has_attachments %}<span class="flag" title="Hat Anhaenge">📎</span>{% endif %}
                     {% if mail.is_noreply %}<span class="flag" title="No-Reply Absender">🤖</span>{% endif %}
                     {% if mail.has_html %}<span class="flag" title="HTML-Mail">🎨</span>{% endif %}
                 </td>
+                <td style="font-size:0.8rem; color:var(--text-muted);">{{ mail.imap_folder or '–' }}</td>
                 <td class="preview-cell">
                     <span class="preview-text">{{ mail.body_preview[:120] if mail.body_preview else '' }}{% if mail.body_preview and mail.body_preview|length > 120 %}…{% endif %}</span>
                 </td>
@@ -101,25 +113,131 @@
         </tbody>
     </table>
 </div>
-<noscript>
-    <button type="submit" class="btn btn-warning">Ausgewählte löschen</button>
-</noscript>
-</form>
-
 {% endblock %}
 
 {% block scripts %}
 <script>
 function toggleAll(source) {
-    document.querySelectorAll('input[name="mail_ids"]').forEach(cb => {
+    document.querySelectorAll('.mail-check').forEach(function(cb) {
         cb.checked = source.checked;
     });
 }
 
-// Verknüpfe den externen Delete-Button mit dem Form
-document.getElementById('deleteSelectedForm')?.addEventListener('submit', function(e) {
-    e.preventDefault();
-    document.getElementById('mailListForm').submit();
-});
+function showToast(title) {
+    document.getElementById('toastTitle').textContent = title;
+    document.getElementById('toastFill').style.width = '0%';
+    document.getElementById('toastFill').className = 'progress-fill';
+    document.getElementById('toastDetail').textContent = 'Starte...';
+    document.getElementById('taskToast').style.display = 'block';
+}
+
+function watchTask(taskId, onDone) {
+    var interval = setInterval(function() {
+        fetch('/api/task/' + taskId)
+        .then(function(r) { return r.json(); })
+        .then(function(task) {
+            var pct = task.total > 0 ? Math.round(task.progress / task.total * 100) : 0;
+            document.getElementById('toastFill').style.width = pct + '%';
+            document.getElementById('toastDetail').textContent = task.detail || task.message || '';
+
+            if (task.status === 'done') {
+                clearInterval(interval);
+                document.getElementById('toastFill').style.width = '100%';
+                document.getElementById('toastFill').classList.add('progress-done');
+                document.getElementById('toastTitle').textContent = 'Geloescht!';
+                var deleted = task.result ? task.result.deleted : 0;
+                document.getElementById('toastDetail').textContent = deleted + ' Mails geloescht';
+                if (onDone) onDone(task);
+                setTimeout(function() {
+                    document.getElementById('taskToast').style.display = 'none';
+                }, 3000);
+            }
+
+            if (task.status === 'error') {
+                clearInterval(interval);
+                document.getElementById('toastTitle').textContent = 'Fehler!';
+                document.getElementById('toastFill').classList.add('progress-error');
+                document.getElementById('toastDetail').textContent = task.error || 'Unbekannt';
+            }
+        });
+    }, 1000);
+}
+
+// ─── Alle Mails dieses Absenders loeschen ───
+function deleteAllMails(senderId, email, count) {
+    if (!confirm('Wirklich alle ' + count + ' Mails von ' + email + ' loeschen?')) return;
+
+    document.getElementById('deleteAllBtn').disabled = true;
+    document.getElementById('deleteAllBtn').textContent = 'Laeuft...';
+    showToast('Loesche: ' + email);
+
+    fetch('/sender/' + senderId + '/delete-all', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.task_id) {
+            watchTask(data.task_id, function() {
+                // Alle Rows ausblenden
+                document.querySelectorAll('.mail-check').forEach(function(cb) {
+                    var row = cb.closest('tr');
+                    if (row) {
+                        row.style.transition = 'opacity 0.3s';
+                        row.style.opacity = '0';
+                    }
+                });
+                document.getElementById('mailCount').textContent = '0';
+            });
+        }
+    })
+    .catch(function(err) {
+        alert('Fehler: ' + err);
+        document.getElementById('deleteAllBtn').disabled = false;
+        document.getElementById('deleteAllBtn').textContent = 'Alle Mails dieses Absenders loeschen';
+    });
+}
+
+// ─── Ausgewaehlte Mails loeschen ───
+function deleteSelectedMails() {
+    var checked = document.querySelectorAll('.mail-check:checked');
+    if (checked.length === 0) {
+        alert('Keine Mails ausgewaehlt.');
+        return;
+    }
+
+    var mailIds = [];
+    checked.forEach(function(cb) { mailIds.push(parseInt(cb.value)); });
+
+    if (!confirm(mailIds.length + ' Mails loeschen?')) return;
+
+    showToast('Loesche ' + mailIds.length + ' Mails');
+
+    fetch('/mails/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mail_ids: mailIds})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.task_id) {
+            watchTask(data.task_id, function() {
+                // Geloeschte Rows entfernen
+                mailIds.forEach(function(id) {
+                    var row = document.getElementById('mail-row-' + id);
+                    if (row) {
+                        row.style.transition = 'opacity 0.3s';
+                        row.style.opacity = '0';
+                        setTimeout(function() { row.remove(); }, 300);
+                    }
+                });
+                // Counter aktualisieren
+                var remaining = document.querySelectorAll('.mail-check').length - mailIds.length;
+                document.getElementById('mailCount').textContent = remaining > 0 ? remaining : '0';
+            });
+        }
+    })
+    .catch(function(err) { alert('Fehler: ' + err); });
+}
 </script>
 {% endblock %}
