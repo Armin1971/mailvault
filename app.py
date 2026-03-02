@@ -19,6 +19,8 @@ app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URI
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = config.SECRET_KEY
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 db.init_app(app)
 
@@ -572,6 +574,58 @@ def api_ordner_scan():
 
     def run_scan():
         import re as _re
+        import email.header
+        from email.utils import parsedate_to_datetime
+
+        def decode_imap_header(raw_value):
+            """Dekodiert MIME-encoded Header wie =?UTF-8?Q?...?="""
+            if not raw_value or raw_value == "?":
+                return raw_value
+            try:
+                parts = email.header.decode_header(raw_value)
+                result = []
+                for part, charset in parts:
+                    if isinstance(part, bytes):
+                        result.append(part.decode(charset or "utf-8", errors="replace"))
+                    else:
+                        result.append(part)
+                return " ".join(result)
+            except Exception:
+                return raw_value
+
+        def decode_utf7(s):
+            """Dekodiert modified UTF-7 (IMAP Ordnernamen wie Grundst&APw-cke)."""
+            if '&' not in s or '-' not in s:
+                return s
+            try:
+                result = []
+                i = 0
+                while i < len(s):
+                    if s[i] == '&' and '-' in s[i:]:
+                        end = s.index('-', i + 1)
+                        if end == i + 1:
+                            result.append('&')
+                        else:
+                            encoded = '+' + s[i+1:end].replace(',', '/')
+                            result.append(encoded.encode('ascii').decode('utf-7'))
+                        i = end + 1
+                    else:
+                        result.append(s[i])
+                        i += 1
+                return ''.join(result)
+            except Exception:
+                return s
+
+        def format_date(raw_date):
+            """Konvertiert RFC2822 Datum zu DD.MM.YYYY HH:MM"""
+            if not raw_date or raw_date == "?":
+                return raw_date
+            try:
+                dt = parsedate_to_datetime(raw_date)
+                return dt.strftime("%d.%m.%Y %H:%M")
+            except Exception:
+                return raw_date[:20]
+
         with app.app_context():
             try:
                 from imap_client import get_imap_connection
@@ -608,7 +662,7 @@ def api_ordner_scan():
                         uids = set(nums[0].split()) if nums[0] else set()
                         count = len(uids)
 
-                        info = {"name": folder, "count": count}
+                        info = {"name": decode_utf7(folder), "raw_name": folder, "count": count}
                         folder_info.append(info)
 
                     except Exception:
@@ -711,9 +765,163 @@ def api_ordner_scan():
 
                             orphan_mails.append({
                                 "uid": uid, "size": size,
-                                "subject": subject[:80],
-                                "from": from_addr[:60],
-                                "date": date[:30],
+                                "subject": decode_imap_header(subject)[:80],
+                                "from": decode_imap_header(from_addr)[:60],
+                                "date": format_date(date),
+                            })
+                        except Exception:
+                            pass
+
+                # ─── Inbox Mails laden ───
+                inbox_mails = []
+                inbox_sizes = []
+                inbox_count = 0
+                inbox_total_size = 0
+
+                for f in folder_info:
+                    if f["name"] == "INBOX":
+                        inbox_count = f["count"]
+                        break
+
+                if inbox_count > 0:
+                    task_manager.update(task_id, len(folders) + 2, len(folders) + 4,
+                                        "Lade Inbox-Mails...", "")
+                    conn.select('"INBOX"', readonly=True)
+                    _, nums = conn.uid("SEARCH", None, "ALL")
+                    inbox_uids = nums[0].split() if nums[0] else []
+
+                    inbox_labels_map = {}  # uid -> labels
+                    batch_size = 100
+                    for start in range(0, len(inbox_uids), batch_size):
+                        batch = inbox_uids[start:start + batch_size]
+                        uid_str = b",".join(batch).decode()
+                        try:
+                            _, data = conn.uid("FETCH", uid_str, "(RFC822.SIZE X-GM-LABELS)")
+                            for item in data:
+                                raw = ""
+                                if isinstance(item, bytes):
+                                    raw = item.decode("utf-8", errors="replace")
+                                elif isinstance(item, tuple):
+                                    raw = item[0].decode("utf-8", errors="replace") if isinstance(item[0], bytes) else str(item[0])
+                                else:
+                                    continue
+                                uid_m = _re.search(r"UID (\d+)", raw)
+                                size_m = _re.search(r"RFC822\.SIZE (\d+)", raw)
+                                labels_m = _re.search(r"X-GM-LABELS \(([^)]*)\)", raw)
+                                if uid_m and size_m:
+                                    uid_val = uid_m.group(1)
+                                    inbox_sizes.append((uid_val, int(size_m.group(1))))
+                                    if labels_m:
+                                        labels = []
+                                        for lb in _re.findall(r'"([^"]*)"', labels_m.group(1)):
+                                            if not lb.startswith("\\"):
+                                                labels.append(decode_utf7(lb))
+                                        inbox_labels_map[uid_val] = labels
+                        except Exception:
+                            pass
+
+                    inbox_total_size = sum(s for _, s in inbox_sizes)
+                    inbox_sizes.sort(key=lambda x: x[1], reverse=True)
+                    top_inbox = inbox_sizes[:100]
+
+                    for uid, size in top_inbox:
+                        try:
+                            _, hdata = conn.uid("FETCH", uid, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])")
+                            header = ""
+                            if hdata:
+                                for part in hdata:
+                                    if isinstance(part, tuple) and len(part) > 1:
+                                        header = part[1].decode("utf-8", errors="replace")
+                                        break
+                            lines = header.strip().split("\n")
+                            subject = next((l[8:].strip() for l in lines if l.lower().startswith("subject:")), "?")
+                            from_addr = next((l[5:].strip() for l in lines if l.lower().startswith("from:")), "?")
+                            date = next((l[5:].strip() for l in lines if l.lower().startswith("date:")), "?")
+
+                            inbox_mails.append({
+                                "uid": uid, "size": size,
+                                "subject": decode_imap_header(subject)[:80],
+                                "from": decode_imap_header(from_addr)[:60],
+                                "date": format_date(date),
+                                "labels": inbox_labels_map.get(uid, []),
+                            })
+                        except Exception:
+                            pass
+
+                # ─── Gesendete Mails laden ───
+                sent_mails = []
+                sent_sizes = []
+                sent_count = 0
+                sent_total_size = 0
+                sent_folder = None
+
+                for f in folder_info:
+                    if "Gesendet" in f["name"] or "Sent" in f["name"]:
+                        sent_folder = f["name"]
+                        sent_count = f["count"]
+                        break
+
+                if sent_folder:
+                    task_manager.update(task_id, len(folders) + 2, len(folders) + 3,
+                                        f"Lade Gesendet-Mails aus {sent_folder}...", "")
+                    conn.select(f'"{sent_folder}"', readonly=True)
+                    _, nums = conn.uid("SEARCH", None, "ALL")
+                    sent_uids = nums[0].split() if nums[0] else []
+
+                    sent_labels_map = {}
+                    batch_size = 100
+                    for start in range(0, len(sent_uids), batch_size):
+                        batch = sent_uids[start:start + batch_size]
+                        uid_str = b",".join(batch).decode()
+                        try:
+                            _, data = conn.uid("FETCH", uid_str, "(RFC822.SIZE X-GM-LABELS)")
+                            for item in data:
+                                raw = ""
+                                if isinstance(item, bytes):
+                                    raw = item.decode("utf-8", errors="replace")
+                                elif isinstance(item, tuple):
+                                    raw = item[0].decode("utf-8", errors="replace") if isinstance(item[0], bytes) else str(item[0])
+                                else:
+                                    continue
+                                uid_m = _re.search(r"UID (\d+)", raw)
+                                size_m = _re.search(r"RFC822\.SIZE (\d+)", raw)
+                                labels_m = _re.search(r"X-GM-LABELS \(([^)]*)\)", raw)
+                                if uid_m and size_m:
+                                    uid_val = uid_m.group(1)
+                                    sent_sizes.append((uid_val, int(size_m.group(1))))
+                                    if labels_m:
+                                        labels = []
+                                        for lb in _re.findall(r'"([^"]*)"', labels_m.group(1)):
+                                            if not lb.startswith("\\"):
+                                                labels.append(decode_utf7(lb))
+                                        sent_labels_map[uid_val] = labels
+                        except Exception:
+                            pass
+
+                    sent_total_size = sum(s for _, s in sent_sizes)
+                    sent_sizes.sort(key=lambda x: x[1], reverse=True)
+                    top_sent = sent_sizes[:100]
+
+                    for uid, size in top_sent:
+                        try:
+                            _, hdata = conn.uid("FETCH", uid, "(BODY[HEADER.FIELDS (TO SUBJECT DATE)])")
+                            header = ""
+                            if hdata:
+                                for part in hdata:
+                                    if isinstance(part, tuple) and len(part) > 1:
+                                        header = part[1].decode("utf-8", errors="replace")
+                                        break
+                            lines = header.strip().split("\n")
+                            subject = next((l[8:].strip() for l in lines if l.lower().startswith("subject:")), "?")
+                            to_addr = next((l[3:].strip() for l in lines if l.lower().startswith("to:")), "?")
+                            date = next((l[5:].strip() for l in lines if l.lower().startswith("date:")), "?")
+
+                            sent_mails.append({
+                                "uid": uid, "size": size,
+                                "subject": decode_imap_header(subject)[:80],
+                                "to": decode_imap_header(to_addr)[:60],
+                                "date": format_date(date),
+                                "labels": sent_labels_map.get(uid, []),
                             })
                         except Exception:
                             pass
@@ -728,6 +936,12 @@ def api_ordner_scan():
                     "orphan_total_size": total_orphan_size,
                     "orphan_mails": orphan_mails,
                     "all_mail_folder": all_mail_folder,
+                    "sent_mails": sent_mails,
+                    "sent_count": sent_count,
+                    "sent_total_size": sent_total_size,
+                    "inbox_mails": inbox_mails,
+                    "inbox_count": inbox_count,
+                    "inbox_total_size": inbox_total_size,
                 }
 
                 task_manager.finish(task_id, result)
@@ -739,9 +953,157 @@ def api_ordner_scan():
     return jsonify({"task_id": task_id})
 
 
+@app.route("/api/ordner/more")
+def api_ordner_more():
+    """Laedt weitere Mails fuer Inbox/Gesendet ab offset."""
+    import re as _re
+    import email.header
+    from email.utils import parsedate_to_datetime
+
+    mail_type = request.args.get("type", "inbox")
+    offset = request.args.get("offset", 0, type=int)
+    limit = 100
+
+    def decode_imap_header(raw_value):
+        if not raw_value or raw_value == "?":
+            return raw_value
+        try:
+            parts = email.header.decode_header(raw_value)
+            result = []
+            for part, charset in parts:
+                if isinstance(part, bytes):
+                    result.append(part.decode(charset or "utf-8", errors="replace"))
+                else:
+                    result.append(part)
+            return " ".join(result)
+        except Exception:
+            return raw_value
+
+    def decode_utf7(s):
+        try:
+            result = []
+            i = 0
+            while i < len(s):
+                if s[i] == '&' and '-' in s[i:]:
+                    end = s.index('-', i + 1)
+                    if end == i + 1:
+                        result.append('&')
+                    else:
+                        encoded = '+' + s[i+1:end].replace(',', '/')
+                        result.append(encoded.encode('ascii').decode('utf-7'))
+                    i = end + 1
+                else:
+                    result.append(s[i])
+                    i += 1
+            return ''.join(result)
+        except Exception:
+            return s
+
+    def format_date(raw_date):
+        if not raw_date or raw_date == "?":
+            return raw_date
+        try:
+            dt = parsedate_to_datetime(raw_date)
+            return dt.strftime("%d.%m.%Y %H:%M")
+        except Exception:
+            return raw_date[:20]
+
+    account = ImapAccount.query.first()
+    if not account:
+        return jsonify({"error": "Kein Account"}), 400
+
+    try:
+        from imap_client import get_imap_connection
+        conn = get_imap_connection(account)
+
+        if mail_type == "inbox":
+            folder = "INBOX"
+            header_field = "FROM"
+        else:
+            folder = "[Gmail]/Gesendet"
+            header_field = "TO"
+
+        conn.select(f'"{folder}"', readonly=True)
+        _, nums = conn.uid("SEARCH", None, "ALL")
+        all_uids = nums[0].split() if nums[0] else []
+
+        # Groessen + Labels holen
+        sizes = []
+        labels_map = {}
+        batch_size = 100
+        for start in range(0, len(all_uids), batch_size):
+            batch = all_uids[start:start + batch_size]
+            uid_str = b",".join(batch).decode()
+            try:
+                _, data = conn.uid("FETCH", uid_str, "(RFC822.SIZE X-GM-LABELS)")
+                for item in data:
+                    raw = ""
+                    if isinstance(item, bytes):
+                        raw = item.decode("utf-8", errors="replace")
+                    elif isinstance(item, tuple):
+                        raw = item[0].decode("utf-8", errors="replace") if isinstance(item[0], bytes) else str(item[0])
+                    else:
+                        continue
+                    uid_m = _re.search(r"UID (\d+)", raw)
+                    size_m = _re.search(r"RFC822\.SIZE (\d+)", raw)
+                    labels_m = _re.search(r"X-GM-LABELS \(([^)]*)\)", raw)
+                    if uid_m and size_m:
+                        uid_val = uid_m.group(1)
+                        sizes.append((uid_val, int(size_m.group(1))))
+                        if labels_m:
+                            labels = []
+                            for lb in _re.findall(r'"([^"]*)"', labels_m.group(1)):
+                                if not lb.startswith("\\"):
+                                    labels.append(decode_utf7(lb))
+                            labels_map[uid_val] = labels
+            except Exception:
+                pass
+
+        sizes.sort(key=lambda x: x[1], reverse=True)
+        page = sizes[offset:offset + limit]
+
+        mails = []
+        for uid, size in page:
+            try:
+                _, hdata = conn.uid("FETCH", uid, f"(BODY[HEADER.FIELDS ({header_field} SUBJECT DATE)])")
+                header = ""
+                if hdata:
+                    for part in hdata:
+                        if isinstance(part, tuple) and len(part) > 1:
+                            header = part[1].decode("utf-8", errors="replace")
+                            break
+                lines = header.strip().split("\n")
+                subject = next((l[8:].strip() for l in lines if l.lower().startswith("subject:")), "?")
+                date = next((l[5:].strip() for l in lines if l.lower().startswith("date:")), "?")
+
+                entry = {
+                    "uid": uid, "size": size,
+                    "subject": decode_imap_header(subject)[:80],
+                    "date": format_date(date),
+                    "labels": labels_map.get(uid, []),
+                }
+
+                if mail_type == "inbox":
+                    from_addr = next((l[5:].strip() for l in lines if l.lower().startswith("from:")), "?")
+                    entry["from"] = decode_imap_header(from_addr)[:60]
+                else:
+                    to_addr = next((l[3:].strip() for l in lines if l.lower().startswith("to:")), "?")
+                    entry["to"] = decode_imap_header(to_addr)[:60]
+
+                mails.append(entry)
+            except Exception:
+                pass
+
+        conn.logout()
+        return jsonify({"mails": mails, "total": len(sizes)})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/mail/move", methods=["POST"])
 def api_mail_move():
-    """Verschiebt Mails per Gmail X-GM-LABELS (Label hinzufuegen)."""
+    """Verschiebt Mails per Gmail X-GM-LABELS (Label hinzufuegen + Quell-Label entfernen)."""
     data = request.get_json()
     uids = data.get("uids", [])
     source_folder = data.get("source_folder", "[Gmail]/Alle Nachrichten")
@@ -786,15 +1148,62 @@ def api_mail_move():
             else:
                 label_arg = f'"{target_folder}"'
 
+            # Quell-Label bestimmen um es zu entfernen
+            remove_label = None
+            if source_folder == "INBOX":
+                remove_label = "\\Inbox"
+
             for uid in uids:
                 try:
+                    # Ziel-Label hinzufuegen
                     conn.uid("STORE", str(uid), "+X-GM-LABELS", label_arg)
+                    # Quell-Label entfernen (z.B. \Inbox)
+                    if remove_label:
+                        conn.uid("STORE", str(uid), "-X-GM-LABELS", remove_label)
                     moved += 1
                 except Exception as e:
                     errors.append(f"UID {uid}: {e}")
 
         conn.logout()
         return jsonify({"moved": moved, "errors": errors})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/mail/archive", methods=["POST"])
+def api_mail_archive():
+    """Archiviert Mails: MOVE aus INBOX nach Alle Nachrichten."""
+    data = request.get_json()
+    uids = data.get("uids", [])
+
+    if not uids:
+        return jsonify({"error": "Keine UIDs angegeben"}), 400
+
+    account = ImapAccount.query.first()
+    if not account:
+        return jsonify({"error": "Kein Account konfiguriert"}), 400
+
+    try:
+        from imap_client import get_imap_connection
+        conn = get_imap_connection(account)
+        conn.select('"INBOX"')
+
+        archived = 0
+        errors = []
+
+        # Alle Nachrichten Ordner finden
+        all_mail = "[Gmail]/Alle Nachrichten"
+
+        for uid in uids:
+            try:
+                conn.uid("MOVE", str(uid), f'"{all_mail}"')
+                archived += 1
+            except Exception as e:
+                errors.append(f"UID {uid}: {e}")
+
+        conn.logout()
+        return jsonify({"archived": archived, "errors": errors})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

@@ -143,3 +143,25 @@
 [2026-03-01 02:05:39]   1064 Mails bewertet
 [2026-03-01 02:05:39] Aktualisiere Sender-Statistiken...
 [2026-03-01 02:05:42] === Nightly Scan beendet in 340s - 1 neue Mails ===
+[2026-03-02 02:00:01] === Nightly Scan gestartet ===
+[2026-03-02 02:00:01] Scanne Account: Gmail Armin (armin.leistenschneider@gmail.com)
+[2026-03-02 02:03:01]   Ordner: INBOX - 8% - 0 neu, 100 uebersprungen, 0 Fehler
+[2026-03-02 02:06:15]   Ordner: [Gmail]/Alle Nachrichten - 16% - 5 neu, 195 uebersprungen, 0 Fehler
+[2026-03-02 02:08:36]   Ordner: [Gmail]/Alle Nachrichten - 24% - 5 neu, 295 uebersprungen, 0 Fehler
+[2026-03-02 02:10:24]   Ordner: [Gmail]/Alle Nachrichten - 33% - 5 neu, 395 uebersprungen, 0 Fehler
+[2026-03-02 02:12:55]   Ordner: [Gmail]/Alle Nachrichten - 41% - 5 neu, 495 uebersprungen, 0 Fehler
+[2026-03-02 02:15:32]   Ordner: [Gmail]/Alle Nachrichten - 49% - 5 neu, 595 uebersprungen, 0 Fehler
+[2026-03-02 02:17:27]   Ordner: [Gmail]/Alle Nachrichten - 57% - 5 neu, 695 uebersprungen, 0 Fehler
+[2026-03-02 02:18:47]   Ordner: [Gmail]/Alle Nachrichten - 65% - 5 neu, 795 uebersprungen, 0 Fehler
+[2026-03-02 02:20:45]   Ordner: [Gmail]/Alle Nachrichten - 73% - 5 neu, 895 uebersprungen, 0 Fehler
+[2026-03-02 02:21:55]   Ordner: [Gmail]/Alle Nachrichten - 82% - 5 neu, 995 uebersprungen, 0 Fehler
+[2026-03-02 02:23:43]   Ordner: [Gmail]/Alle Nachrichten - 90% - 5 neu, 1095 uebersprungen, 0 Fehler
+[2026-03-02 02:30:49]   Ordner: [Gmail]/Alle Nachrichten - 98% - 5 neu, 1195 uebersprungen, 0 Fehler
+[2026-03-02 02:31:05]   Fertig: 6 neu, 1219 uebersprungen, 0 Fehler
+[2026-03-02 02:31:05] Bewerte 6 neue Mails...
+[2026-03-02 02:31:10]   287 Mails bewertet
+[2026-03-02 02:31:10] Zombie-Cleanup: Pruefe ob DB-Mails noch in Gmail existieren...
+[2026-03-02 02:31:16]   Gmail: 1041 Message-IDs gefunden
+[2026-03-02 02:31:16]   1 Zombie-Mails als geloescht markiert
+[2026-03-02 02:31:16] Aktualisiere Sender-Statistiken...
+[2026-03-02 02:31:18] === Nightly Scan beendet in 1877s - 6 neue Mails ===

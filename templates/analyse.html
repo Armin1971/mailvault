@@ -36,10 +36,10 @@
 
 <!-- Tabs -->
 <div class="tab-bar">
-    <button class="tab-btn active" onclick="showTab('biggest', this)">Groesste Mails</button>
-    <button class="tab-btn" onclick="showTab('senders', this)">Nach Absender</button>
-    <button class="tab-btn" onclick="showTab('folders', this)">Nach Ordner</button>
-    <button class="tab-btn" onclick="showTab('heatmap', this)">Heatmap</button>
+    <button class="tab-btn active" onclick="showTab('biggest')">Groesste Mails</button>
+    <button class="tab-btn" onclick="showTab('senders')">Nach Absender</button>
+    <button class="tab-btn" onclick="showTab('folders')">Nach Ordner</button>
+    <button class="tab-btn" onclick="showTab('heatmap')">Heatmap</button>
 </div>
 
 <!-- Tab: Groesste Mails -->
@@ -198,15 +198,15 @@
 
 {% block scripts %}
 <script>
-function showTab(name, btn) {
+function showTab(name) {
     var tabs = document.querySelectorAll('.tab-content');
     var btns = document.querySelectorAll('.tab-btn');
     for (var i = 0; i < tabs.length; i++) {
-        tabs[i].style.display = 'none';
+        tabs[i].classList.remove('active');
         btns[i].classList.remove('active');
     }
-    document.getElementById('tab-' + name).style.display = 'block';
-    btn.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+    event.target.classList.add('active');
 }
 </script>
 {% endblock %}

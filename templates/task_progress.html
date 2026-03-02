@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Fortschritt – MailVault{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Task läuft...</h1>
+    <p class="subtitle" id="taskDescription">Bitte warten</p>
+</div>
+
+<div class="progress-container">
+    <div class="progress-bar-wrapper">
+        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+    </div>
+    <div class="progress-stats">
+        <span id="progressCount">0</span> / <span id="progressTotal">?</span>
+    </div>
+    <div class="progress-message" id="progressMessage">Starte...</div>
+    <div class="progress-spinner" id="spinner">
+        <div class="spinner"></div>
+    </div>
+</div>
+
+<div id="errorList" class="error-list" style="display:none">
+    <h3>Warnungen:</h3>
+    <ul id="errors"></ul>
+</div>
+
+<div id="doneActions" style="display:none">
+    <a href="{{ next_url }}" class="btn btn-primary" id="continueBtn">Weiter zum Dashboard</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const taskId = "{{ task_id }}";
+const nextUrl = "{{ next_url }}";
+
+const evtSource = new EventSource("/progress/" + taskId);
+
+evtSource.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+
+    document.getElementById("taskDescription").textContent = data.description || "";
+    document.getElementById("progressMessage").textContent = data.message || "";
+    document.getElementById("progressCount").textContent = data.current || 0;
+    document.getElementById("progressTotal").textContent = data.total || "?";
+
+    // Progress bar
+    if (data.total > 0) {
+        const pct = Math.min(100, Math.round((data.current / data.total) * 100));
+        document.getElementById("progressBar").style.width = pct + "%";
+    } else if (data.status === "running") {
+        // Indeterminate
+        document.getElementById("progressBar").style.width = "100%";
+        document.getElementById("progressBar").classList.add("indeterminate");
+    }
+
+    // Fehler
+    if (data.errors && data.errors.length > 0) {
+        document.getElementById("errorList").style.display = "block";
+        const ul = document.getElementById("errors");
+        ul.innerHTML = "";
+        data.errors.forEach(e => {
+            const li = document.createElement("li");
+            li.textContent = e;
+            ul.appendChild(li);
+        });
+    }
+
+    // Fertig
+    if (data.status === "done") {
+        evtSource.close();
+        document.getElementById("spinner").style.display = "none";
+        document.getElementById("doneActions").style.display = "block";
+        document.getElementById("progressBar").style.width = "100%";
+        document.getElementById("progressBar").classList.remove("indeterminate");
+        document.getElementById("progressBar").classList.add("done");
+        document.querySelector("h1").textContent = "Fertig!";
+
+        if (data.result) {
+            let msg = "Abgeschlossen.";
+            if (data.result.imported !== undefined) {
+                msg = `${data.result.imported} Mails importiert, ${data.result.scored || 0} bewertet.`;
+            } else if (data.result.total_deleted !== undefined) {
+                msg = `${data.result.total_deleted} Mails gelöscht.`;
+            } else if (data.result.deleted !== undefined) {
+                msg = `${data.result.deleted} Mails gelöscht.`;
+            }
+            document.getElementById("progressMessage").textContent = msg;
+        }
+    }
+
+    if (data.status === "error") {
+        evtSource.close();
+        document.getElementById("spinner").style.display = "none";
+        document.getElementById("doneActions").style.display = "block";
+        document.getElementById("progressBar").classList.add("error");
+        document.querySelector("h1").textContent = "Fehler aufgetreten";
+    }
+};
+
+evtSource.onerror = function() {
+    // Verbindung verloren, prüfe Status per API
+    setTimeout(() => {
+        fetch("/api/task/" + taskId)
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === "done" || data.status === "error") {
+                    evtSource.close();
+                    document.getElementById("spinner").style.display = "none";
+                    document.getElementById("doneActions").style.display = "block";
+                }
+            });
+    }, 2000);
+};
+</script>
+{% endblock %}
